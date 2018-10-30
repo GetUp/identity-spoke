@@ -1,0 +1,7 @@
+.bundle/
+log/*.log
+pkg/
+spec/test_identity_app/db/*.sqlite3
+spec/test_identity_app/db/*.sqlite3-journal
+spec/test_identity_app/log/*.log
+spec/test_identity_app/tmp/
