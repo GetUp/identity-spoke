@@ -1,0 +1,12 @@
+<div class="form-group">
+  <%= label_tag "services[spoke]" do %>
+    <p>Push this list to Spoke Campaign</p>
+    <%= check_box_tag "services[spoke]", "on", false, {:id => "services_spoke", :class => "js-toggle-select"} %>
+    Yes
+  <% end %>
+  <div class="js-toggle-input" style="display: none;">
+    <%= label_tag "spoke[campaign_id]", 'Campaign: ' %>
+    <%= select_tag "spoke[campaign_id]", options_for_select(IdentitySpoke::ApplicationHelper.campaigns_for_select) %>
+  </div>
+  <hr />
+</div>
