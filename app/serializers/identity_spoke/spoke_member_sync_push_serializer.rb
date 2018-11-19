@@ -6,6 +6,14 @@ module IdentitySpoke
       @object.id
     end
 
+    def first_name
+      @object.first_name ? @object.first_name : ''
+    end
+
+    def last_name
+      @object.last_name ? @object.last_name : ''
+    end
+
     def cell
       "+#{@object.mobile}"
     end
