@@ -15,17 +15,17 @@ class Member < ApplicationRecord
 
   scope :with_phone_type, -> (phone_type) {
     with_phone_numbers
-    .merge(PhoneNumber.send("#{phone_type}s"))
+      .merge(PhoneNumber.send(phone_type))
   }
 
   scope :with_mobile, -> {
     with_phone_numbers
-    .merge(PhoneNumber.mobiles)
+      .merge(PhoneNumber.mobile)
   }
 
   scope :with_landline, -> {
     with_phone_numbers
-    .merge(PhoneNumber.landlines)
+      .merge(PhoneNumber.landline)
   }
 
   def name
@@ -48,14 +48,14 @@ class Member < ApplicationRecord
 
   def landline
     phone_numbers
-      .landlines
+      .landline
       .sort_by(&:updated_at)
       .last.try(:phone)
   end
 
   def mobile
     phone_numbers
-      .mobiles
+      .mobile
       .sort_by(&:updated_at)
       .last.try(:phone)
   end

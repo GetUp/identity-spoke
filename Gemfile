@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 gemspec
-gem 'rails', '~> 5.1.4'
+gem 'rails', '~> 5.1.6'
 gem 'pg', '~> 0.18'
 gem 'active_model_serializers', '~> 0.10.7'
 

@@ -1,9 +1,11 @@
 module IdentitySpoke
   class CampaignContact < ApplicationRecord
-    include ReadOnly
+    include ReadWrite
     include ConnectionExtension
     self.table_name = "campaign_contact"
     belongs_to :campaign
+    belongs_to :assignment, optional: true
+    has_many :question_responses
 
     def self.add_members(batch)
       write_result = bulk_create(batch)

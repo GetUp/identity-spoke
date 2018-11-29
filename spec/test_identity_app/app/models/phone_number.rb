@@ -5,8 +5,8 @@ class PhoneNumber < ApplicationRecord
   MOBILE_TYPE = 'mobile'
   LANDLINE_TYPE = 'landline'
 
-  scope :mobiles, -> { where(phone_type: MOBILE_TYPE) }
-  scope :landlines, -> { where(phone_type: LANDLINE_TYPE) }
+  scope :mobile, -> { where(phone_type: MOBILE_TYPE) }
+  scope :landline, -> { where(phone_type: LANDLINE_TYPE) }
 
   def self.standardise_phone_number(phone)
     phone = phone.to_s

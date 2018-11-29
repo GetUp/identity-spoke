@@ -47,6 +47,12 @@ module ExternalDatabaseHelpers
       CustomField.all.destroy_all
       CustomFieldKey.all.destroy_all
       Search.all.destroy_all
+      IdentitySpoke::QuestionResponse.all.destroy_all
+      IdentitySpoke::InteractionStep.all.destroy_all
+      IdentitySpoke::Message.all.destroy_all
+      IdentitySpoke::OptOut.all.destroy_all
+      IdentitySpoke::Assignment.all.destroy_all
+      IdentitySpoke::User.all.destroy_all
       IdentitySpoke::CampaignContact.all.destroy_all
       IdentitySpoke::Campaign.all.destroy_all
       IdentitySpoke::Organization.all.destroy_all
