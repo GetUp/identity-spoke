@@ -4,7 +4,7 @@ PATH
     identity_spoke (0.1.0)
       active_model_serializers (~> 0.10.7)
       pg (~> 0.18)
-      rails (~> 5.1.6)
+      rails
 
 GEM
   remote: https://rubygems.org/
@@ -79,6 +79,7 @@ GEM
       activesupport (>= 4.2.0)
     i18n (1.1.1)
       concurrent-ruby (~> 1.0)
+    jaro_winkler (1.5.1)
     jaro_winkler (1.5.1-x86_64-darwin-17)
     jsonapi-renderer (0.2.0)
     loofah (2.2.2)
@@ -213,7 +214,7 @@ DEPENDENCIES
   pry
   pry-byebug
   pry-rails
-  rails (~> 5.1.6)
+  rails
   rspec-mocks
   rspec-rails
   rubocop
