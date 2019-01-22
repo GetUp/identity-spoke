@@ -5,7 +5,7 @@ module IdentitySpoke
     belongs_to :assignment
     has_many :survey_results
 
-    BATCH_AMOUNT=200
+    BATCH_AMOUNT=1000
 
     def user
       assignment.user
