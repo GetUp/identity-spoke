@@ -40,8 +40,24 @@ module IdentitySpoke
     "#{SYSTEM_NAME.titleize} - #{SYNCING.titleize}: #{contact_campaign_name} ##{JSON.parse(external_system_params)['campaign_id']} (#{CONTACT_TYPE})"
   end
 
+  def self.method_currenly_running?(method_name)
+    workers = Sidekiq::Workers.new
+    workers.each do |_process_id, _thread_id, work|
+      matched_process = work["payload"]["args"] = [SYSTEM_NAME, method_name]
+      if matched_process
+        return true
+      end
+    end
+    return false
+  end
+
   def self.fetch_new_messages(force: false)
-    puts ">>> Spoke fetch_new_messages running ..."
+    if self.method_currenly_running?(__method__.to_s)
+      puts ">>> Spoke fetch_new_messages skipping as process already running ..."
+      return
+    else
+      puts ">>> Spoke fetch_new_messages running ..."
+    end
 
     last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '1970-01-01 00:00:00')
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at)
@@ -95,7 +111,12 @@ module IdentitySpoke
   end
 
   def self.fetch_new_opt_outs(force: false)
-    puts ">>> Spoke fetch_new_opt_outs running ..."
+    if self.method_currenly_running?(__method__.to_s)
+      puts ">>> Spoke fetch_new_opt_outs skipping as process already running ..."
+      return
+    else
+      puts ">>> Spoke fetch_new_opt_outs running ..."
+    end
 
     if Settings.spoke.opt_out_subscription_id
       last_created_at = Time.parse($redis.with { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
