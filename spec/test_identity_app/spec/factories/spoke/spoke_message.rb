@@ -11,6 +11,9 @@ module IdentitySpoke
       factory :spoke_message_delivered do
         send_status { 'DELIVERED' }
       end
+      factory :spoke_message_errored do
+        send_status { 'ERROR' }
+      end
     end
   end
 end

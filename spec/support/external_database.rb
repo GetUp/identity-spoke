@@ -15,9 +15,6 @@ module ExternalDatabaseHelpers
     end
 
     def setup
-      ActiveRecord::Base.establish_connection ENV['SPOKE_DATABASE_URL']
-      ActiveRecord::Base.connection
-    rescue
       ExternalDatabaseHelpers.create_database
     ensure
       ActiveRecord::Base.establish_connection ENV['IDENTITY_DATABASE_URL']

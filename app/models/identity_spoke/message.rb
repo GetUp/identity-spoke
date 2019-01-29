@@ -16,7 +16,7 @@ module IdentitySpoke
     end
 
     scope :updated_messages, -> (last_created_at) {
-      where('message.send_status = ?', 'DELIVERED')
+      where('message.send_status != ?', 'ERROR')
       .where('message.created_at >= ?', last_created_at)
       .order('message.created_at')
       .limit(BATCH_AMOUNT)

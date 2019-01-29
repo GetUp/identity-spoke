@@ -55,15 +55,14 @@ module IdentitySpoke
 
   def self.fetch_new_messages(force: false)
     ## Do not run method if another worker is currently processing this method
-    if self.worker_currenly_running?(__method__.to_s)
-      return
-    end
+    return if self.worker_currenly_running?(__method__.to_s)
 
-    last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '1970-01-01 00:00:00')
+    last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '2019-01-01 00:00:00')
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at)
 
     iteration_method = force ? :find_each : :each
     updated_messages.send(iteration_method) do |message|
+      #self.delay(retry: false, queue: 'low').handle_new_message(message.id)
       self.handle_new_message(message.id)
     end
 
@@ -77,10 +76,17 @@ module IdentitySpoke
   def self.handle_new_message(message_id)
     message = Message.find(message_id)
     contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
-    contactee = Member.upsert_member(phones: [{ phone: message.campaign_contact.cell.sub(/^[+]*/,'') }], firstname: message.campaign_contact.first_name, lastname: message.campaign_contact.last_name)
+    campaign_contact = CampaignContact.find_by(campaign_id: message.assignment.campaign.id, cell: message.contact_number)
+
+    unless campaign_contact
+      Notify.warning "Spoke: CampaignContact Find Failed", "campaign_id: #{message.assignment.campaign.id}, cell: #{message.contact_number}"
+      return
+    end
+
+    contactee = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
 
     unless contactee
-      Notify.warning "Spoke: Contactee Insert Failed", "Contactee #{message.campaign_contact.inspect} could not be inserted because the contactee could not be created"
+      Notify.warning "Spoke: Contactee Insert Failed", "Contactee #{campaign_contact.inspect} could not be inserted because the contactee could not be created"
       return
     end
 
@@ -102,19 +108,20 @@ module IdentitySpoke
                               status: message.send_status,
                               notes: message.is_from_contact ? 'inbound' : 'outbound')
     contact.reload
-
-    message.campaign_contact.question_responses.each do |qr|
-      contact_response_key = ContactResponseKey.find_or_create_by(key: qr.interaction_step.question, contact_campaign: contact_campaign)
-      ContactResponse.find_or_create_by(contact: contact, value: qr.value, contact_response_key: contact_response_key)
+    puts '>>>>'
+    puts contact.id
+    campaign_contact.question_responses.each do |qr|
+      puts "question response --- #{qr.inspect}"
+      contact_response_key = ContactResponseKey.find_or_create_by!(key: qr.interaction_step.question, contact_campaign: contact_campaign)
+      puts "question response key --- #{contact_response_key.inspect}"
+      contact_response = ContactResponse.find_or_create_by!(contact: contact, value: qr.value, contact_response_key: contact_response_key)
+      puts "contact_response --- #{contact_response.inspect}"
     end
-
   end
 
   def self.fetch_new_opt_outs(force: false)
     ## Do not run method if another worker is currently processing this method
-    if self.worker_currenly_running?(__method__.to_s)
-      return
-    end
+    return if self.worker_currenly_running?(__method__.to_s)
 
     if Settings.spoke.opt_out_subscription_id
       last_created_at = Time.parse($redis.with { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
@@ -122,6 +129,7 @@ module IdentitySpoke
 
       iteration_method = force ? :find_each : :each
       updated_opt_outs.send(iteration_method) do |opt_out|
+        #self.delay(retry: false, queue: 'low').handle_new_opt_out(opt_out.id)
         self.handle_new_opt_out(opt_out.id)
       end
 
@@ -139,7 +147,7 @@ module IdentitySpoke
     if campaign_contact
       contactee = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
       subscription = Subscription.find(Settings.spoke.opt_out_subscription_id)
-      contactee.unsubscribe_from(subscription, 'spoke:opt_out')
+      contactee.unsubscribe_from(subscription, 'spoke:opt_out') if contactee
     end
   end
 end
