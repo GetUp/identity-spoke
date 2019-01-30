@@ -8,6 +8,7 @@ class Member < ApplicationRecord
   has_many :subscriptions, through: :member_subscriptions
   has_many :contacts_received, class_name: 'Contact', foreign_key: 'contactee_id'
   has_many :contacts_made, class_name: 'Contact', foreign_key: 'contactor_id'
+  has_many :contact_responses, through: :contacts_received
 
   scope :with_phone_numbers, -> {
     joins(:phone_numbers)

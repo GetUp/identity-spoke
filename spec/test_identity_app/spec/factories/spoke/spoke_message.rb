@@ -1,7 +1,7 @@
 module IdentitySpoke
   FactoryBot.define do
     factory :spoke_message, class: Message do
-      is_from_contact { true }
+      is_from_contact { false }
       text { Faker::GreekPhilosophers.quote }
       service_response { Faker::Book.title }
       service { Faker::Book.title }
@@ -13,6 +13,9 @@ module IdentitySpoke
       end
       factory :spoke_message_errored do
         send_status { 'ERROR' }
+      end
+      factory :spoke_response_delivered do
+        is_from_contact { true }
       end
     end
   end

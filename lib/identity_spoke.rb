@@ -62,8 +62,7 @@ module IdentitySpoke
 
     iteration_method = force ? :find_each : :each
     updated_messages.send(iteration_method) do |message|
-      #self.delay(retry: false, queue: 'low').handle_new_message(message.id)
-      self.handle_new_message(message.id)
+      self.delay(retry: false, queue: 'low').handle_new_message(message.id)
     end
 
     unless updated_messages.empty?
@@ -74,32 +73,29 @@ module IdentitySpoke
   end
 
   def self.handle_new_message(message_id)
-    message = Message.find(message_id)
-    contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
-    campaign_contact = CampaignContact.find_by(campaign_id: message.assignment.campaign.id, cell: message.contact_number)
+    ## Get the message
+    message = IdentitySpoke::Message.find(message_id)
 
-    unless campaign_contact
+    ## Find who is the campaign contact for the message
+    unless campaign_contact = IdentitySpoke::CampaignContact.find_by(campaign_id: message.assignment.campaign.id, cell: message.contact_number)
       Notify.warning "Spoke: CampaignContact Find Failed", "campaign_id: #{message.assignment.campaign.id}, cell: #{message.contact_number}"
       return
     end
 
-    contactee = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
+    ## Create Members for both the user and campaign contact
+    campaign_contact_member = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
+    user_member = Member.upsert_member(phones: [{ phone: message.user.cell.sub(/^[+]*/,'') }], firstname: message.user.first_name, lastname: message.user.last_name)
 
-    unless contactee
-      Notify.warning "Spoke: Contactee Insert Failed", "Contactee #{campaign_contact.inspect} could not be inserted because the contactee could not be created"
-      return
-    end
+    ## Assign the contactor and contactee according to if the message was from the campaign contact
+    contactor = message.is_from_contact ? campaign_contact_member: user_member
+    contactee = message.is_from_contact ? user_member : campaign_contact_member
 
-    # Texter conditional upsert phone
-    if message.user
-      contactor = Member.upsert_member(phones: [{ phone: message.user.cell.sub(/^[+]*/,'') }])
-    else
-      contactor = nil
-    end
-
+    ## Find or create the contact campaign
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: message.assignment.campaign.id, system: SYSTEM_NAME)
     contact_campaign.update_attributes!(name: message.assignment.campaign.title, contact_type: CONTACT_TYPE)
 
+    ## Find or create the contact
+    contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
     contact.update_attributes!(contactee: contactee,
                               contactor: contactor,
                               contact_campaign: contact_campaign,
@@ -108,14 +104,18 @@ module IdentitySpoke
                               status: message.send_status,
                               notes: message.is_from_contact ? 'inbound' : 'outbound')
     contact.reload
-    puts '>>>>'
-    puts contact.id
+
+    ## Loop over all of the campaign contacts question responses if message is not from contact
+    return if message.is_from_contact
     campaign_contact.question_responses.each do |qr|
-      puts "question response --- #{qr.inspect}"
+      ### Find or create the contact response key
       contact_response_key = ContactResponseKey.find_or_create_by!(key: qr.interaction_step.question, contact_campaign: contact_campaign)
-      puts "question response key --- #{contact_response_key.inspect}"
-      contact_response = ContactResponse.find_or_create_by!(contact: contact, value: qr.value, contact_response_key: contact_response_key)
-      puts "contact_response --- #{contact_response.inspect}"
+
+      ## Create a contact response against the contact if no existing contact response exists for the contactee
+      matched_contact_responses = contactee.contact_responses.where(value: qr.value, contact_response_key: contact_response_key)
+      if matched_contact_responses.empty?
+        ContactResponse.find_or_create_by!(contact: contact, value: qr.value, contact_response_key: contact_response_key)
+      end
     end
   end
 
@@ -125,12 +125,11 @@ module IdentitySpoke
 
     if Settings.spoke.opt_out_subscription_id
       last_created_at = Time.parse($redis.with { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
-      updated_opt_outs = OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at)
+      updated_opt_outs = IdentitySpoke::OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at)
 
       iteration_method = force ? :find_each : :each
       updated_opt_outs.send(iteration_method) do |opt_out|
-        #self.delay(retry: false, queue: 'low').handle_new_opt_out(opt_out.id)
-        self.handle_new_opt_out(opt_out.id)
+        self.delay(retry: false, queue: 'low').handle_new_opt_out(opt_out.id)
       end
 
       unless updated_opt_outs.empty?
@@ -142,8 +141,8 @@ module IdentitySpoke
   end
 
   def self.handle_new_opt_out(opt_out_id)
-    opt_out = OptOut.find(opt_out_id)
-    campaign_contact = CampaignContact.where(cell: opt_out.cell).last
+    opt_out = IdentitySpoke::OptOut.find(opt_out_id)
+    campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
     if campaign_contact
       contactee = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
       subscription = Subscription.find(Settings.spoke.opt_out_subscription_id)
