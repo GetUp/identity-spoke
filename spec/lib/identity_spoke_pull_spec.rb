@@ -129,9 +129,9 @@ describe IdentitySpoke do
       spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
       message = FactoryBot.create(:spoke_message_delivered, created_at: @time, id: '123', assignment: spoke_assignment, send_status: 'DELIVERED', contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
       IdentitySpoke.fetch_new_messages
-      expect(Contact.last).to have_attributes(external_id: '123', status: 'DELIVERED')
-      expect(Contact.last.happened_at.utc.to_s).to eq(@time.utc.to_s)
-      expect(Contact.last.contactee.phone).to eq('61727700400')
+      expect(Contact.where(external_id: '123').first).to have_attributes(status: 'DELIVERED')
+      expect(Contact.where(external_id: '123').first.happened_at.utc.to_s).to eq(@time.utc.to_s)
+      expect(Contact.where(external_id: '123').first.contactee.phone).to eq('61727700400')
     end
 
     it 'should create contact if there is no name st' do
@@ -170,16 +170,34 @@ describe IdentitySpoke do
     end
 
     it 'should correctly not duplicate Survey Results' do
-      IdentitySpoke.fetch_new_messages
+      ## Create the members
+      campaign_contact_member1 = Member.upsert_member(phones: [{ phone: "61427700401" }], firstname: "Bob1")
+      campaign_contact_member2 = Member.upsert_member(phones: [{ phone: "61427700402" }], firstname: "Bob2")
+      campaign_contact_member3 = Member.upsert_member(phones: [{ phone: "61427700403" }], firstname: "Bob3")
+      user_member = Member.upsert_member(phones: [{ phone: @spoke_user.cell.sub(/^[+]*/,'') }], firstname: @spoke_user.first_name)
+      ## Create the campaign
+      contact_campaign = FactoryBot.create(:contact_campaign, name: @spoke_campaign.title, external_id: @spoke_campaign.id)
+      ## Create the contacts
+      contact1 = FactoryBot.create(:contact, external_id: 1, contactee: campaign_contact_member1, contactor: user_member)
+      contact2 = FactoryBot.create(:contact, external_id: 2, contactee: campaign_contact_member2, contactor: user_member)
+      contact3 = FactoryBot.create(:contact, external_id: 3, contactee: campaign_contact_member3, contactor: user_member)
+      ## Create the contact response keys
+      contact_response_key1 = FactoryBot.create(:contact_response_key, key: @interaction_step1.question, contact_campaign: contact_campaign)
+      contact_response_key2 = FactoryBot.create(:contact_response_key, key: @interaction_step2.question, contact_campaign: contact_campaign)
+      ## Create the contact responses
+      3.times do |n|
+        n += 1
+        FactoryBot.create(:contact_response, contact_response_key: contact_response_key1, value: 'yes', contact: eval("contact#{n}"))
+        FactoryBot.create(:contact_response, contact_response_key: contact_response_key2, value: 'no', contact: eval("contact#{n}"))
+        FactoryBot.create(:contact_response, contact_response_key: contact_response_key2, value: 'maybe', contact: eval("contact#{n}"))
+      end
+
       spoke_assignment = IdentitySpoke::Assignment.first
       campaign_contact = IdentitySpoke::CampaignContact.first
-      FactoryBot.create(:spoke_message_delivered, created_at: @time, id: 123456, assignment: spoke_assignment, user_number: @spoke_user.cell, contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
+      FactoryBot.create(:spoke_message_delivered, created_at: @time, id: 123456, assignment: spoke_assignment, user_number: @spoke_user.cell, contact_number: campaign_contact.cell)
+
       IdentitySpoke.fetch_new_messages
-      contact_response = ContactCampaign.last.contact_response_keys.find_by(key: 'voting_intention').contact_responses.first
-      expect(contact_response.value).to eq('yes')
-      contact_response = ContactCampaign.last.contact_response_keys.find_by(key: 'favorite_party').contact_responses.first
-      expect(contact_response.value).to eq('no')
-      expect(Contact.first.contact_responses.count).to eq(3)
+      expect(ContactResponse.count).to eq(9)
     end
 
     it 'should update the last_created_at' do

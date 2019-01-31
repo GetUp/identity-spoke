@@ -6,3 +6,4 @@ spec/test_identity_app/log/*.log
 spec/test_identity_app/tmp/
 coverage/
 spec/examples.txt
+.byebug_history
