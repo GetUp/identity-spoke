@@ -5,12 +5,10 @@ module IdentitySpoke
     belongs_to :assignment
     belongs_to :organization
 
-    BATCH_AMOUNT=100
-
     scope :updated_opt_outs, -> (last_created_at) {
       where('opt_out.created_at >= ?', last_created_at)
       .order('opt_out.created_at')
-      .limit(BATCH_AMOUNT)
+      .limit(IdentitySpoke.get_pull_batch_amount)
     }
   end
 end

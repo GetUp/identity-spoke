@@ -2,7 +2,7 @@ describe IdentitySpoke::SpokeMemberSyncPushSerializer do
   context 'serialize' do
     before(:each) do
       clean_external_database
-
+      Settings.stub_chain(:spoke) { {} }
       @sync_id = 1
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, organization: @spoke_organization)

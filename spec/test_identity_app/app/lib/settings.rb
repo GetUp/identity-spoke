@@ -12,7 +12,9 @@ class Settings
     return {
       "database_url" => ENV['SPOKE_DATABASE_URL'],
       "read_only_database_url" => ENV['SPOKE_DATABASE_URL'],
-      "opt_out_subscription_id" => Subscription::SMS_SUBSCRIPTION
+      "opt_out_subscription_id" => Subscription::SMS_SUBSCRIPTION,
+      "push_batch_amount" => nil,
+      "pull_batch_amount" => nil,
     }
   end
 
