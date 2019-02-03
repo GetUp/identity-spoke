@@ -96,8 +96,22 @@ module IdentitySpoke
     end
 
     ## Create Members for both the user and campaign contact
-    campaign_contact_member = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
-    user_member = Member.upsert_member(phones: [{ phone: message.user.cell.sub(/^[+]*/,'') }], firstname: message.user.first_name, lastname: message.user.last_name)
+    campaign_contact_member = Member.upsert_member(
+      {
+        phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
+        firstname: campaign_contact.first_name,
+        lastname: campaign_contact.last_name
+      },
+      "#{SYSTEM_NAME}:#{__method__.to_s}"
+    )
+    user_member = Member.upsert_member(
+      {
+        phones: [{ phone: message.user.cell.sub(/^[+]*/,'') }],
+        firstname: message.user.first_name,
+        lastname: message.user.last_name
+      },
+      "#{SYSTEM_NAME}:#{__method__.to_s}"
+    )
 
     ## Assign the contactor and contactee according to if the message was from the campaign contact
     contactor = message.is_from_contact ? campaign_contact_member: user_member
@@ -157,7 +171,14 @@ module IdentitySpoke
     opt_out = IdentitySpoke::OptOut.find(opt_out_id)
     campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
     if campaign_contact
-      contactee = Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
+      contactee = Member.upsert_member(
+        {
+          phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
+          firstname: campaign_contact.first_name,
+          lastname: campaign_contact.last_name
+        },
+        "#{SYSTEM_NAME}:#{__method__.to_s}"
+      )
       subscription = Subscription.find(Settings.spoke.opt_out_subscription_id)
       contactee.unsubscribe_from(subscription, 'spoke:opt_out') if contactee
     end
