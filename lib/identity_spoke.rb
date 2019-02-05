@@ -41,6 +41,10 @@ module IdentitySpoke
     "#{SYSTEM_NAME.titleize} - #{SYNCING.titleize}: #{contact_campaign_name} ##{JSON.parse(external_system_params)['campaign_id']} (#{CONTACT_TYPE})"
   end
 
+  def self.base_campaign_url(campaign_id)
+    Settings.spoke.base_campaign_url ? sprintf(Settings.spoke.base_campaign_url, campaign_id.to_s) : nil
+  end
+
   def self.worker_currenly_running?(method_name)
     workers = Sidekiq::Workers.new
     workers.each do |_process_id, _thread_id, work|
