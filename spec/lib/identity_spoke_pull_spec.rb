@@ -253,6 +253,52 @@ describe IdentitySpoke do
     end
   end
 
+  context '#fetch_active_campaigns' do
+
+    before(:all) do
+      Sidekiq::Testing.inline!
+    end
+
+    after(:all) do
+      Sidekiq::Testing.fake!
+    end
+
+    before(:each) do
+      clean_external_database
+      spoke_organization = FactoryBot.create(:spoke_organization)
+      2.times do
+        spoke_campaign = FactoryBot.create(:spoke_campaign, is_started: true, is_archived: false, title: 'Test', organization: spoke_organization)
+        FactoryBot.create(:spoke_interaction_step, campaign: spoke_campaign, question: 'attend')
+        FactoryBot.create(:spoke_interaction_step, campaign: spoke_campaign, question: 'volunteer')
+      end
+      archived_spoke_campaign = FactoryBot.create(:spoke_campaign, is_started: true, is_archived: true, title: 'Test', organization: spoke_organization)
+      FactoryBot.create(:spoke_interaction_step, campaign: archived_spoke_campaign, question: 'barnstorm')
+      unstarted_spoke_campaign = FactoryBot.create(:spoke_campaign, is_started: false, is_archived: true, title: 'Test', organization: spoke_organization)
+      FactoryBot.create(:spoke_interaction_step, campaign: unstarted_spoke_campaign, question: 'calling_party')
+    end
+
+    it 'should create contact_campaigns' do
+      IdentitySpoke.fetch_active_campaigns
+      expect(ContactCampaign.count).to eq(2)
+      ContactCampaign.all.each do |campaign|
+        expect(campaign).to have_attributes(
+          name: 'Test',
+          system: IdentitySpoke::SYSTEM_NAME,
+          contact_type: IdentitySpoke::CONTACT_TYPE
+        )
+      end
+    end
+
+    it 'should create contact_response_keys' do
+      IdentitySpoke.fetch_active_campaigns
+      expect(ContactResponseKey.count).to eq(4)
+      expect(ContactResponseKey.where(key: 'attend').count).to eq(2)
+      expect(ContactResponseKey.where(key: 'volunteer').count).to eq(2)
+      expect(ContactResponseKey.where(key: 'barnstorm').count).to eq(0)
+      expect(ContactResponseKey.where(key: 'calling_party').count).to eq(0)
+    end
+  end
+
   context '#get_pull_batch_amount' do
     context 'with no settings parameters set' do
       it 'should return default class constant' do

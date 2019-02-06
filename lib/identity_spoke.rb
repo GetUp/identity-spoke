@@ -6,7 +6,7 @@ module IdentitySpoke
   PUSH_BATCH_AMOUNT = 1000
   SYNCING = 'campaign'
   CONTACT_TYPE = 'sms'
-  PULL_JOBS = [[:fetch_new_messages, 5.minutes], [:fetch_new_opt_outs, 30.minutes]]
+  PULL_JOBS = [[:fetch_new_messages, 5.minutes], [:fetch_new_opt_outs, 30.minutes], [:fetch_active_campaigns, 10.minutes]]
 
   def self.push(sync_id, members, external_system_params)
     begin
@@ -185,6 +185,32 @@ module IdentitySpoke
       )
       subscription = Subscription.find(Settings.spoke.subscription_id)
       contactee.unsubscribe_from(subscription, 'spoke:opt_out') if contactee
+    end
+  end
+
+  def self.fetch_active_campaigns(force: false)
+    ## Do not run method if another worker is currently processing this method
+    return if self.worker_currenly_running?(__method__.to_s)
+
+    active_campaigns = IdentitySpoke::Campaign.active
+
+    iteration_method = force ? :find_each : :each
+
+    active_campaigns.send(iteration_method) do |campaign|
+      self.delay(retry: false, queue: 'low').handle_campaign(campaign.id)
+    end
+
+    active_campaigns.size
+  end
+
+  def self.handle_campaign(campaign_id)
+    campaign = IdentitySpoke::Campaign.find(campaign_id)
+
+    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign.id, system: SYSTEM_NAME)
+    contact_campaign.update_attributes!(name: campaign.title, contact_type: CONTACT_TYPE)
+
+    campaign.interaction_steps.each do |interaction_step|
+      ContactResponseKey.find_or_create_by!(key: interaction_step.question, contact_campaign: contact_campaign)
     end
   end
 end
