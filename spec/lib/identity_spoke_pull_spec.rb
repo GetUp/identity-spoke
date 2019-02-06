@@ -229,7 +229,7 @@ describe IdentitySpoke do
       clean_external_database
       $redis.reset
       @subscription = FactoryBot.create(:sms_subscription)
-      Settings.stub_chain(:spoke, :opt_out_subscription_id) { @subscription.id }
+      Settings.stub_chain(:spoke, :subscription_id) { @subscription.id }
       Settings.stub_chain(:spoke, :push_batch_amount) { nil }
       Settings.stub_chain(:spoke, :pull_batch_amount) { nil }
       @time = Time.now - 120.seconds

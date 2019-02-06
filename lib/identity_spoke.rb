@@ -154,7 +154,7 @@ module IdentitySpoke
     ## Do not run method if another worker is currently processing this method
     return if self.worker_currenly_running?(__method__.to_s)
 
-    if Settings.spoke.opt_out_subscription_id
+    if Settings.spoke.subscription_id
       last_created_at = Time.parse($redis.with { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
       updated_opt_outs = IdentitySpoke::OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at)
 
@@ -183,7 +183,7 @@ module IdentitySpoke
         },
         "#{SYSTEM_NAME}:#{__method__.to_s}"
       )
-      subscription = Subscription.find(Settings.spoke.opt_out_subscription_id)
+      subscription = Subscription.find(Settings.spoke.subscription_id)
       contactee.unsubscribe_from(subscription, 'spoke:opt_out') if contactee
     end
   end
