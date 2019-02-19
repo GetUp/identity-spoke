@@ -23,7 +23,18 @@ module IdentitySpoke
     end
 
     def custom_fields
-      @object.flattened_custom_fields.to_json
+      @object.flattened_custom_fields
+        .merge({ location: location}.compact)
+        .to_json
     end
+
+    private
+
+    def location
+      address = @object.try(:address)
+      postcode = address.try(:postcode)
+      postcode.present? ? postcode : address.try(:town)
+    end
+
   end
 end

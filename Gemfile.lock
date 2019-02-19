@@ -80,7 +80,6 @@ GEM
     i18n (1.1.1)
       concurrent-ruby (~> 1.0)
     jaro_winkler (1.5.1)
-    jaro_winkler (1.5.1-x86_64-darwin-17)
     jsonapi-renderer (0.2.0)
     loofah (2.2.2)
       crass (~> 1.0.2)
@@ -225,4 +224,4 @@ DEPENDENCIES
   spring-commands-rspec
 
 BUNDLED WITH
-   1.16.2
+   1.16.6

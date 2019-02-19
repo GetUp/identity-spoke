@@ -40,5 +40,46 @@ describe IdentitySpoke::SpokeMemberSyncPushSerializer do
       ).as_json
       expect(rows.first[:cell]).to eq('+61427700500')
     end
+
+    context 'with a member with a postcode' do
+      let!(:member_with_address) { double('member',
+        mobile: '040000000',
+        id: 1,
+        last_name: nil,
+        first_name: nil,
+        flattened_custom_fields: {},
+      )}
+
+      it 'should return the postcode as location in the custom fields' do
+        expect(member_with_address).to receive_message_chain(:address, :postcode).and_return('2291')
+        rows = ActiveModel::Serializer::CollectionSerializer.new(
+          [member_with_address],
+          serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
+          campaign_id: @spoke_campaign.id
+        ).as_json
+        expect(rows[0][:custom_fields]).to eq("{\"location\":\"2291\"}")
+      end
+    end
+
+    context 'with a member with with no postcode but a town' do
+      let!(:member_with_address) { double('member',
+        mobile: '040000000',
+        id: 1,
+        last_name: nil,
+        first_name: nil,
+        flattened_custom_fields: {},
+      )}
+
+      it 'should return the postcode as location in the custom fields' do
+        expect(member_with_address).to receive_message_chain(:address, :postcode).and_return(nil)
+        expect(member_with_address).to receive_message_chain(:address, :town).and_return('test town')
+        rows = ActiveModel::Serializer::CollectionSerializer.new(
+          [member_with_address],
+          serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
+          campaign_id: @spoke_campaign.id
+        ).as_json
+        expect(rows[0][:custom_fields]).to eq("{\"location\":\"test town\"}")
+      end
+    end
   end
 end
