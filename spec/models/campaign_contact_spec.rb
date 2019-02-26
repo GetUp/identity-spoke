@@ -28,5 +28,26 @@ describe IdentitySpoke::CampaignContact do
       expect(@spoke_campaign.campaign_contacts.count).to eq(2)
       expect(@spoke_campaign.campaign_contacts.select('distinct cell').count).to eq(2)
     end
+
+    context 'with an opt out for a campaign contact' do
+      let!(:member) { FactoryBot.create(:member_with_mobile) }
+      let!(:organization) { FactoryBot.create(:spoke_organization) }
+      let!(:user) { FactoryBot.create(:spoke_user) }
+      let!(:campaign) { FactoryBot.create(:spoke_campaign, organization: organization) }
+      let!(:assignment) { FactoryBot.create(:spoke_assignment, user: user, campaign: campaign) }
+      let!(:opt_out) { FactoryBot.create(:spoke_opt_out, cell: "+#{member.mobile}", assignment: assignment, organization: organization) }
+
+      it 'should not insert the campaign contact' do
+        inserted_records = IdentitySpoke::CampaignContact.add_members(
+          ActiveModel::Serializer::CollectionSerializer.new(
+            [member],
+            serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
+            campaign_id: campaign.id
+          ).as_json
+        )
+        expect(inserted_records).to eq(0)
+        expect(campaign.campaign_contacts.count).to eq(0)
+      end
+    end
   end
 end

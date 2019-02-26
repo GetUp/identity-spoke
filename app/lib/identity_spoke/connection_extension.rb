@@ -3,6 +3,7 @@ module IdentitySpoke
     def self.included(base)
       base.class_eval do
         def self.bulk_create(set=[], conflict=false)
+          return if set.empty?
           field_keys = *set[0].keys
           values_string = set.map do |x|
             values = field_keys.map do |field_key|
