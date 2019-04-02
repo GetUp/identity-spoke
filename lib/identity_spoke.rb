@@ -21,12 +21,16 @@ module IdentitySpoke
 
   def self.push_in_batches(sync_id, members, external_system_params)
     begin
-      external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
+      params = JSON.parse(external_system_params)
+      external_campaign_id = params['campaign_id'].to_i
       members.in_batches(of: get_push_batch_amount).each_with_index do |batch_members, batch_index|
         rows = ActiveModel::Serializer::CollectionSerializer.new(
           batch_members,
           serializer: SpokeMemberSyncPushSerializer,
-          campaign_id: external_campaign_id
+          campaign_id: external_campaign_id,
+          include_nearest_events: !!params[:include_nearest_events],
+          include_nearest_events_radius: params[:include_nearest_events_radius].to_i,
+          include_nearest_events_rsvp_max: params[:include_nearest_events_rsvp_max].to_i,
         ).as_json
         write_result_count = CampaignContact.add_members(rows)
 

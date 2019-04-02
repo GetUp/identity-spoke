@@ -337,4 +337,8 @@ class Member < ApplicationRecord
   def is_subscribed_to?(subscription)
     !!self.member_subscriptions.find_by(subscription: subscription, unsubscribed_at: nil)
   end
+
+  def upcoming_events(radius: 5, max_rsvps: nil)
+    []
+  end
 end

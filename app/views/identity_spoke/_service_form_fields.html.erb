@@ -7,6 +7,15 @@
   <div class="js-toggle-input" style="display: none;">
     <%= label_tag "spoke[campaign_id]", 'Campaign: ' %>
     <%= select_tag "spoke[campaign_id]", options_for_select(IdentitySpoke::ApplicationHelper.campaigns_for_select) %>
+    <br/>
+    <%= label_tag "spoke[include_nearest_events]", 'Include nearest events: ' %>
+    <%= check_box_tag "spoke[include_nearest_events]", "on", false %>
+    <br/>
+    <%= label_tag "spoke[include_nearest_events_radius]", 'in radius: ' %>
+    <%= text_field_tag "spoke[include_nearest_events_radius]", "" %>
+    <br/>
+    <%= label_tag "spoke[include_nearest_events_rsvp_max]", 'with RSVPs less than: ' %>
+    <%= text_field_tag "spoke[include_nearest_events_radius]", "" %>
   </div>
   <hr />
 </div>

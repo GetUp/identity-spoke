@@ -23,9 +23,16 @@ module IdentitySpoke
     end
 
     def custom_fields
-      @object.flattened_custom_fields
+      custom_fields = @object.flattened_custom_fields
         .merge({ location: location}.compact)
-        .to_json
+      if instance_options[:include_nearest_events]
+        custom_fields[:events] = @object.upcoming_events(
+          radius: instance_options[:include_nearest_events_radius],
+          max_rsvps: instance_options[:include_nearest_events_rsvp_max]
+        )
+        custom_fields[:event_list] = custom_fields[:events].map(&:to_s).join('')
+      end
+      custom_fields.to_json
     end
 
     private

@@ -81,5 +81,36 @@ describe IdentitySpoke::SpokeMemberSyncPushSerializer do
         expect(rows[0][:custom_fields]).to eq("{\"location\":\"test town\"}")
       end
     end
+
+    context 'with include_nearest_events passed' do
+      let!(:member_with_address) { double('member',
+        mobile: '040000000',
+        id: 1,
+        last_name: nil,
+        first_name: nil,
+        flattened_custom_fields: {},
+      )}
+      let!(:test_event) { {
+        'name': 'test event',
+        'local_start_time': DateTime.current,
+        'local_end_time': DateTime.current + 2.hours,
+        'location': 'test location'
+      } }
+
+      it 'should find all events near the user' do
+        expect(member_with_address).to receive_message_chain(:upcoming_events).with(radius: 6, max_rsvps: 5).and_return([])
+        rows = ActiveModel::Serializer::CollectionSerializer.new(
+          [member_with_address],
+          serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
+          campaign_id: @spoke_campaign.id,
+          include_nearest_events: true,
+          include_nearest_events_radius: 6,
+          include_nearest_events_rsvp_max: 5,
+        ).as_json
+        upcoming_events = JSON.parse(rows[0][:custom_fields])
+        expect(upcoming_events['events']).to eq([test_event])
+        expect(upcoming_events['event_list']).to eq('1) Test event at test location (')
+      end
+    end
   end
 end
