@@ -90,8 +90,10 @@ module IdentitySpoke
     ## Do not run method if another worker is currently processing this method
     yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
 
+    started_at = DateTime.now
     last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '2019-01-01 00:00:00')
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at)
+    all_updated_messages = Message.all_updated_messages(force ? DateTime.new() : last_updated_at)
 
     iteration_method = force ? :find_each : :each
     updated_messages.send(iteration_method) do |message|
@@ -102,7 +104,22 @@ module IdentitySpoke
       $redis.with { |r| r.set 'spoke:messages:last_created_at', updated_messages.last.created_at }
     end
 
-    yield updated_messages.size, updated_messages.pluck(:id), { scope: 'spoke:messages:last_created_at', from: last_created_at, to: updated_messages.empty? ? nil : updated_messages.last.created_at }, false
+    execution_time_seconds = ((DateTime.now - started_at) * 24 * 60 * 60).to_i
+    yield(
+      updated_messages.size,
+      updated_messages.pluck(:id),
+      {
+        scope: 'spoke:messages:last_created_at',
+        scope_limit: IdentitySpoke.get_pull_batch_amount,
+        from: last_created_at,
+        to: updated_messages.empty? ? nil : updated_messages.last.created_at,
+        started_at: started_at,
+        completed_at: DateTime.now,
+        execution_time_seconds: execution_time_seconds,
+        remaining_behind: updated_users_all.count
+      },
+      false
+    )
   end
 
   def self.handle_new_message(sync_id, message_id)
@@ -178,6 +195,7 @@ module IdentitySpoke
         contact_response.save! if contact_response.new_record?
       end
     end
+    Sync.update_report_if_last_record_for_import(sync_id, call_id)
   end
 
   def self.fetch_new_opt_outs(sync_id, force: false)
@@ -185,8 +203,10 @@ module IdentitySpoke
     yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
 
     if Settings.spoke.subscription_id
+      started_at = DateTime.now
       last_created_at = Time.parse($redis.with { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
       updated_opt_outs = IdentitySpoke::OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at)
+      updated_opt_outs_all = IdentitySpoke::OptOut.updated_opt_outs_all(force ? DateTime.new() : last_created_at)
 
       iteration_method = force ? :find_each : :each
       updated_opt_outs.send(iteration_method) do |opt_out|
@@ -196,8 +216,23 @@ module IdentitySpoke
       unless updated_opt_outs.empty?
         $redis.with { |r| r.set 'spoke:opt_outs:last_created_at', updated_opt_outs.last.created_at }
       end
-      
-      yield updated_opt_outs.size, updated_opt_outs.pluck(:id), { scope: 'spoke:opt_outs:last_created_at', from: last_created_at, to: updated_opt_outs.empty? ? nil : updated_opt_outs.last.created_at }, false
+
+      execution_time_seconds = ((DateTime.now - started_at) * 24 * 60 * 60).to_i
+      yield(
+        updated_opt_outs.size,
+        updated_opt_outs.pluck(:id),
+        {
+          scope: 'spoke:opt_outs:last_created_at',
+          scope_limit: 0,
+          from: last_created_at,
+          to: updated_opt_outs.empty? ? nil : updated_opt_outs.last.created_at,
+          started_at: started_at,
+          completed_at: DateTime.now,
+          execution_time_seconds: execution_time_seconds,
+          remaining_behind: updated_opt_outs_all.count
+        },
+        false
+      )
     end
   end
 
@@ -221,6 +256,7 @@ module IdentitySpoke
       subscription = Subscription.find(Settings.spoke.subscription_id)
       contactee.unsubscribe_from(subscription, 'spoke:opt_out', DateTime.now, nil, audit_data) if contactee
     end
+    Sync.update_report_if_last_record_for_import(sync_id, opt_out_id)
   end
 
   def self.fetch_active_campaigns(sync_id, force: false)
@@ -235,7 +271,12 @@ module IdentitySpoke
       self.delay(retry: false, queue: 'low').handle_campaign(sync_id, campaign.id)
     end
 
-    yield active_campaigns.size, active_campaigns.pluck(:id), { }, false
+    yield(
+      active_campaigns.size,
+      active_campaigns.pluck(:id),
+      {},
+      false
+    )
   end
 
   def self.handle_campaign(sync_id, campaign_id)
