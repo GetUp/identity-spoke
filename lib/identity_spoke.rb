@@ -93,7 +93,7 @@ module IdentitySpoke
     started_at = DateTime.now
     last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '2019-01-01 00:00:00')
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at)
-    all_updated_messages = Message.all_updated_messages(force ? DateTime.new() : last_created_at)
+    updated_messages_all = Message.updated_messages_all(force ? DateTime.new() : last_created_at)
 
     iteration_method = force ? :find_each : :each
     updated_messages.send(iteration_method) do |message|
@@ -116,7 +116,7 @@ module IdentitySpoke
         started_at: started_at,
         completed_at: DateTime.now,
         execution_time_seconds: execution_time_seconds,
-        remaining_behind: updated_users_all.count
+        remaining_behind: updated_messages_all.count
       },
       false
     )
