@@ -23,9 +23,19 @@ module IdentitySpoke
     end
 
     def custom_fields
-      @object.flattened_custom_fields
-        .merge({ location: location}.compact)
-        .to_json
+      data = @object.flattened_custom_fields
+      data['address'] = @object.address
+      data['postcode'] = @object.postcode
+      data["areas"] = @object.areas.each_with_index.map{|area, index|
+        {
+          name: area.name,
+          code: area.code,
+          area_type: area.area_type,
+          party: area.party,
+          representative_name: area.representative_name
+        }
+      }
+      data.to_json
     end
 
     private
