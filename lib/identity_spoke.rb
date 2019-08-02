@@ -142,10 +142,10 @@ module IdentitySpoke
         lastname: campaign_contact.last_name,
         member_id: campaign_contact.external_id
       },
-      "#{SYSTEM_NAME}:#{__method__.to_s}",
-      audit_data,
-      false,
-      true
+      entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+      audit_data: audit_data,
+      ignore_name_change: false,
+      strict_member_id_match: true
     )
     user_member = Member.upsert_member(
       {
@@ -153,10 +153,10 @@ module IdentitySpoke
         firstname: message.user.first_name,
         lastname: message.user.last_name
       },
-      "#{SYSTEM_NAME}:#{__method__.to_s}",
-      audit_data,
-      false,
-      false
+      entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+      audit_data: audit_data,
+      ignore_name_change: false,
+      strict_member_id_match:false
     )
 
     ## Assign the contactor and contactee according to if the message was from the campaign contact
@@ -249,10 +249,10 @@ module IdentitySpoke
           lastname: campaign_contact.last_name,
           member_id: campaign_contact.external_id
         },
-        "#{SYSTEM_NAME}:#{__method__.to_s}",
-        audit_data,
-        false,
-        true
+        entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+        audit_data: audit_data,
+        ignore_name_change: false,
+        strict_member_id_match: true
       )
       subscription = Subscription.find(Settings.spoke.subscription_id)
       contactee.unsubscribe_from(subscription, 'spoke:opt_out', DateTime.now, nil, audit_data) if contactee
