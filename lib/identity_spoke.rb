@@ -7,6 +7,7 @@ module IdentitySpoke
   SYNCING = 'campaign'
   CONTACT_TYPE = 'sms'
   PULL_JOBS = [[:fetch_new_messages, 5.minutes], [:fetch_new_opt_outs, 30.minutes], [:fetch_active_campaigns, 10.minutes]]
+  MEMBER_RECORD_DATA_TYPE='object'
 
   def self.push(sync_id, members, external_system_params)
     begin
