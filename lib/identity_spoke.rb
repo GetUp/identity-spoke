@@ -124,7 +124,6 @@ module IdentitySpoke
   end
 
   def self.handle_new_message(sync_id, message_id)
-    audit_data = {sync_id: sync_id}
     ## Get the message
     message = IdentitySpoke::Message.find(message_id)
 
@@ -135,7 +134,7 @@ module IdentitySpoke
     end
 
     ## Create Members for both the user and campaign contact
-    campaign_contact_member = Member.upsert_member(
+    campaign_contact_member = UpsertMember.call(
       {
         phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
         firstname: campaign_contact.first_name,
@@ -143,20 +142,16 @@ module IdentitySpoke
         member_id: campaign_contact.external_id
       },
       entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
-      audit_data: audit_data,
-      ignore_name_change: false,
-      strict_member_id_match: true
+      ignore_name_change: false
     )
-    user_member = Member.upsert_member(
+    user_member = UpsertMember.call(
       {
         phones: [{ phone: message.user.cell.sub(/^[+]*/,'') }],
         firstname: message.user.first_name,
         lastname: message.user.last_name
       },
       entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
-      audit_data: audit_data,
-      ignore_name_change: false,
-      strict_member_id_match:false
+      ignore_name_change: false
     )
 
     ## Assign the contactor and contactee according to if the message was from the campaign contact
@@ -165,12 +160,10 @@ module IdentitySpoke
 
     ## Find or create the contact campaign
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: message.assignment.campaign.id, system: SYSTEM_NAME)
-    contact_campaign.audit_data
     contact_campaign.update_attributes!(name: message.assignment.campaign.title, contact_type: CONTACT_TYPE)
 
     ## Find or create the contact
     contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
-    contact.audit_data = audit_data
     contact.update_attributes!(contactee: contactee,
                               contactor: contactor,
                               contact_campaign: contact_campaign,
@@ -185,14 +178,12 @@ module IdentitySpoke
     campaign_contact.question_responses.each do |qr|
       ### Find or create the contact response key
       contact_response_key = ContactResponseKey.find_or_initialize_by(key: qr.interaction_step.question, contact_campaign: contact_campaign)
-      contact_response_key.audit_data = audit_data
       contact_response_key.save! if contact_response_key.new_record?
 
       ## Create a contact response against the contact if no existing contact response exists for the contactee
       matched_contact_responses = contactee.contact_responses.where(value: qr.value, contact_response_key: contact_response_key)
       if matched_contact_responses.empty?
         contact_response = ContactResponse.find_or_initialize_by(contact: contact, value: qr.value, contact_response_key: contact_response_key)
-        contact_response.audit_data = audit_data
         contact_response.save! if contact_response.new_record?
       end
     end
@@ -238,11 +229,10 @@ module IdentitySpoke
   end
 
   def self.handle_new_opt_out(sync_id, opt_out_id)
-    audit_data = {sync_id: sync_id}
     opt_out = IdentitySpoke::OptOut.find(opt_out_id)
     campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
     if campaign_contact
-      contactee = Member.upsert_member(
+      contactee = UpsertMember.call(
         {
           phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
           firstname: campaign_contact.first_name,
@@ -250,12 +240,10 @@ module IdentitySpoke
           member_id: campaign_contact.external_id
         },
         entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
-        audit_data: audit_data,
-        ignore_name_change: false,
-        strict_member_id_match: true
+        ignore_name_change: false
       )
       subscription = Subscription.find(Settings.spoke.subscription_id)
-      contactee.unsubscribe_from(subscription, 'spoke:opt_out', DateTime.now, nil, audit_data) if contactee
+      contactee.unsubscribe_from(subscription, 'spoke:opt_out', DateTime.now, nil) if contactee
     end
     Sync.update_report_if_last_record_for_import(sync_id, opt_out_id)
   end
@@ -281,16 +269,13 @@ module IdentitySpoke
   end
 
   def self.handle_campaign(sync_id, campaign_id)
-    audit_data = {sync_id: sync_id}
     campaign = IdentitySpoke::Campaign.find(campaign_id)
 
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign.id, system: SYSTEM_NAME)
-    contact_campaign.audit_data = audit_data
     contact_campaign.update!(name: campaign.title, contact_type: CONTACT_TYPE)
 
     campaign.interaction_steps.each do |interaction_step|
       contact_response_key = ContactResponseKey.find_or_initialize_by(key: interaction_step.question, contact_campaign: contact_campaign)
-      contact_response_key.audit_data = audit_data
       contact_response_key.save! if contact_response_key.new_record?
     end
   end
