@@ -9,11 +9,11 @@ module IdentitySpoke
   PULL_JOBS = [[:fetch_new_messages, 5.minutes], [:fetch_new_opt_outs, 30.minutes], [:fetch_active_campaigns, 10.minutes]]
   MEMBER_RECORD_DATA_TYPE='object'
 
-  def self.push(sync_id, members, external_system_params)
+  def self.push(sync_id, member_ids, external_system_params)
     begin
       external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
       external_campaign_name = Campaign.find(external_campaign_id).title
-
+      members = Member.find(member_ids)
       yield members.with_mobile, external_campaign_name
     rescue => e
       raise e
