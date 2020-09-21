@@ -13,8 +13,8 @@ module IdentitySpoke
     begin
       external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
       external_campaign_name = Campaign.find(external_campaign_id).title
-      members = Member.find(member_ids)
-      yield members.with_mobile, external_campaign_name
+      members = Member.find(member_ids).with_mobile
+      yield members, external_campaign_name
     rescue => e
       raise e
     end
