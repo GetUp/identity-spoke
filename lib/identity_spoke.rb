@@ -243,9 +243,8 @@ module IdentitySpoke
         ignore_name_change: false
       )
       subscription = Subscription.find(Settings.spoke.subscription_id)
-      contactee.unsubscribe_from(subscription, 'spoke:opt_out', DateTime.now, nil) if contactee
+      contactee.unsubscribe_from(subscription, reason: 'spoke:opt_out', event_time: DateTime.now) if contactee
     end
-    Sync.update_report_if_last_record_for_import(sync_id, opt_out_id)
   end
 
   def self.fetch_active_campaigns(sync_id, force: false)
