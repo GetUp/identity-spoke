@@ -187,7 +187,6 @@ module IdentitySpoke
         contact_response.save! if contact_response.new_record?
       end
     end
-    Sync.update_report_if_last_record_for_import(sync_id, message_id)
   end
 
   def self.fetch_new_opt_outs(sync_id, force: false)
