@@ -1,9 +1,12 @@
 .env.test
 .bundle/
+.bundle/*
 log/*.log
 spec/test_identity_app/.env.test
 spec/test_identity_app/log/*.log
 spec/test_identity_app/tmp/
+fixtures/*
+coverage/*
 coverage/
 spec/examples.txt
 .byebug_history

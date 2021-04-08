@@ -15,7 +15,7 @@ module IdentitySpoke
     end
 
     def cell
-      "+#{@object.mobile_if_can_be_detected_or_phone}"
+      "+#{@object.mobile_if_can_be_detected_or_phone.phone}"
     end
 
     def campaign_id

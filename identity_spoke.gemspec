@@ -17,7 +17,7 @@ Gem::Specification.new do |s|
   s.files = Dir["{app,config,db,lib}/**/*", "Rakefile", "README.md"]
 
   s.add_dependency "rails"
-  s.add_dependency "pg", "~> 0.18"
+  s.add_dependency "pg"
   s.add_dependency "active_model_serializers", "~> 0.10.7"
 
 end
