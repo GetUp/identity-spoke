@@ -2,8 +2,6 @@ require "identity_spoke/engine"
 
 module IdentitySpoke
   SYSTEM_NAME = 'spoke'
-  PULL_BATCH_AMOUNT = 1000
-  PUSH_BATCH_AMOUNT = 1000
   SYNCING = 'campaign'
   CONTACT_TYPE = 'sms'
   PULL_JOBS = [[:fetch_new_messages, 5.minutes], [:fetch_new_opt_outs, 30.minutes], [:fetch_active_campaigns, 10.minutes]]
@@ -23,7 +21,7 @@ module IdentitySpoke
   def self.push_in_batches(sync_id, members, external_system_params)
     begin
       external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
-      members.in_batches(of: get_push_batch_amount).each_with_index do |batch_members, batch_index|
+      members.in_batches(of: Settings.spoke.push_batch_amount).each_with_index do |batch_members, batch_index|
         rows = ActiveModel::Serializer::CollectionSerializer.new(
           batch_members,
           serializer: SpokeMemberSyncPushSerializer,
@@ -62,14 +60,6 @@ module IdentitySpoke
     end
     puts ">>> #{SYSTEM_NAME.titleize} #{method_name} running ..."
     return false
-  end
-
-  def self.get_pull_batch_amount
-    Settings.spoke.pull_batch_amount || PULL_BATCH_AMOUNT
-  end
-
-  def self.get_push_batch_amount
-    Settings.spoke.push_batch_amount || PUSH_BATCH_AMOUNT
   end
 
   def self.get_pull_jobs
@@ -111,7 +101,7 @@ module IdentitySpoke
       updated_messages.pluck(:id),
       {
         scope: 'spoke:messages:last_created_at',
-        scope_limit: IdentitySpoke.get_pull_batch_amount,
+        scope_limit: Settings.spoke.pull_batch_amount,
         from: last_created_at,
         to: updated_messages.empty? ? nil : updated_messages.last.created_at,
         started_at: started_at,

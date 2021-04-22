@@ -316,20 +316,4 @@ describe IdentitySpoke do
       expect(ContactResponseKey.where(key: 'calling_party').count).to eq(0)
     end
   end
-
-  context '#get_pull_batch_amount' do
-    context 'with no settings parameters set' do
-      it 'should return default class constant' do
-        expect(IdentitySpoke.get_pull_batch_amount).to eq(1000)
-      end
-    end
-    context 'with settings parameters set' do
-      before(:each) do
-        Settings.stub_chain(:spoke, :pull_batch_amount) { 100 }
-      end
-      it 'should return set variable' do
-        expect(IdentitySpoke.get_pull_batch_amount).to eq(100)
-      end
-    end
-  end
 end
