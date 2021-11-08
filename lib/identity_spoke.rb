@@ -123,15 +123,7 @@ module IdentitySpoke
       return
     end
 
-    ## Find who is the user for the message
-    if message.user_id.present?
-      unless user = IdentitySpoke::User.find(message.user_id)
-        Notify.warning "Spoke: User Find Failed", "user_id: #{message.user_id}, message_id: #{message.id}"
-        return
-      end
-    end
-
-    ## Create Members for both the user and campaign contact
+    ## Create Member for campaign contact
     campaign_contact_member = UpsertMember.call(
       {
         phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
@@ -142,18 +134,22 @@ module IdentitySpoke
       entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
       ignore_name_change: false
     )
-    user_member = UpsertMember.call(
-      {
-        phones: [{ phone: user.cell.sub(/^[+]*/,'') }],
-        firstname: user.first_name,
-        lastname: user.last_name
-      },
-      entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
-      ignore_name_change: false
-    )
+    ## Create Member for user if message.user_id is not null
+    if message.user_id.present?
+      user = IdentitySpoke::User.find(message.user_id)
+      user_member = UpsertMember.call(
+        {
+          phones: [{ phone: user.cell.sub(/^[+]*/,'') }],
+          firstname: user.first_name,
+          lastname: user.last_name
+        },
+        entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+        ignore_name_change: false
+      )
+    end
 
     ## Assign the contactor and contactee according to if the message was from the campaign contact
-    contactor = message.is_from_contact ? campaign_contact_member: user_member
+    contactor = message.is_from_contact ? campaign_contact_member : user_member
     contactee = message.is_from_contact ? user_member : campaign_contact_member
 
     ## Find or create the contact campaign
