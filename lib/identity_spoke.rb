@@ -153,8 +153,8 @@ module IdentitySpoke
     contactee = message.is_from_contact ? user_member : campaign_contact_member
 
     ## Find or create the contact campaign
-    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: message.assignment.campaign.id, system: SYSTEM_NAME)
-    contact_campaign.update_attributes!(name: message.assignment.campaign.title, contact_type: CONTACT_TYPE)
+    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign_contact.campaign_id, system: SYSTEM_NAME)
+    contact_campaign.update_attributes!(name: campaign_contact.campaign.title, contact_type: CONTACT_TYPE)
 
     ## Find or create the contact
     contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
