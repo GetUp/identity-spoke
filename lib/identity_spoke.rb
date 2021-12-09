@@ -118,12 +118,12 @@ module IdentitySpoke
     message = IdentitySpoke::Message.find(message_id)
 
     ## Find who is the campaign contact for the message
-    unless campaign_contact = IdentitySpoke::CampaignContact.find_by(campaign_id: message.assignment.campaign.id, cell: message.contact_number)
-      Notify.warning "Spoke: CampaignContact Find Failed", "campaign_id: #{message.assignment.campaign.id}, cell: #{message.contact_number}"
+    unless campaign_contact = IdentitySpoke::CampaignContact.find(message.campaign_contact_id)
+      Notify.warning "Spoke: CampaignContact Find Failed", "campaign_id: #{message.campaign_contact_id}, cell: #{message.contact_number}"
       return
     end
 
-    ## Create Members for both the user and campaign contact
+    ## Create Member for campaign contact
     campaign_contact_member = UpsertMember.call(
       {
         phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
@@ -134,23 +134,30 @@ module IdentitySpoke
       entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
       ignore_name_change: false
     )
+
+    ## Create Member for user if message.user_id is not null
+    unless user = IdentitySpoke::User.find(message.user_id)
+      Notify.warning "Spoke: User Find Failed", "campaign_id: #{message.campaign_contact_id}, cell: #{message.contact_number}, user_id: #{message.user_id}"
+      return
+    end
+
     user_member = UpsertMember.call(
       {
-        phones: [{ phone: message.user.cell.sub(/^[+]*/,'') }],
-        firstname: message.user.first_name,
-        lastname: message.user.last_name
+        phones: [{ phone: user.cell.sub(/^[+]*/,'') }],
+        firstname: user.first_name,
+        lastname: user.last_name
       },
       entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
       ignore_name_change: false
     )
 
     ## Assign the contactor and contactee according to if the message was from the campaign contact
-    contactor = message.is_from_contact ? campaign_contact_member: user_member
+    contactor = message.is_from_contact ? campaign_contact_member : user_member
     contactee = message.is_from_contact ? user_member : campaign_contact_member
 
     ## Find or create the contact campaign
-    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: message.assignment.campaign.id, system: SYSTEM_NAME)
-    contact_campaign.update_attributes!(name: message.assignment.campaign.title, contact_type: CONTACT_TYPE)
+    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign_contact.campaign_id, system: SYSTEM_NAME)
+    contact_campaign.update_attributes!(name: campaign_contact.campaign.title, contact_type: CONTACT_TYPE)
 
     ## Find or create the contact
     contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
