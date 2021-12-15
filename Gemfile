@@ -3,7 +3,7 @@ source 'https://rubygems.org'
 gemspec
 gem 'rails'
 gem 'pg'
-gem 'active_model_serializers', '~> 0.10.7'
+gem 'active_model_serializers'
 
 group :development, :test do
   gem 'phony'
@@ -19,7 +19,7 @@ group :development, :test do
   gem 'pry-rails'
   gem 'pry-byebug'
   gem 'spring-commands-rspec'
-  gem 'sidekiq', '~> 5.1.1'
+  gem 'sidekiq'
   gem 'sidekiq-batch'
   gem 'sidekiq-limit_fetch'
   gem 'sidekiq-unique-jobs'

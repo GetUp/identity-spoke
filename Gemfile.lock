@@ -230,7 +230,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  active_model_serializers (~> 0.10.7)
+  active_model_serializers
   byebug
   database_cleaner
   dotenv-rails
@@ -242,11 +242,11 @@ DEPENDENCIES
   pry
   pry-byebug
   pry-rails
-  rails
+  rails (~> 6.0.0)
   rspec-mocks
   rspec-rails
   rubocop
-  sidekiq (~> 5.1.1)
+  sidekiq
   sidekiq-batch
   sidekiq-limit_fetch
   sidekiq-unique-jobs
