@@ -49,11 +49,19 @@ module IdentitySpoke
     Settings.spoke.base_campaign_url ? sprintf(Settings.spoke.base_campaign_url, campaign_id.to_s) : nil
   end
 
-  def self.worker_currenly_running?(method_name)
+  def self.worker_currently_running?(method_name, sync_id)
     workers = Sidekiq::Workers.new
     workers.each do |_process_id, _thread_id, work|
-      matched_process = work["payload"]["args"] = [SYSTEM_NAME, method_name]
-      if matched_process
+      args = work["payload"]["args"]
+      worker_sync_id = (args.count > 0) ? args[0] : nil
+      worker_sync = worker_sync_id ? Sync.find_by(id: worker_sync_id) : nil
+      next unless worker_sync
+      worker_system = worker_sync.external_system
+      worker_method_name = JSON.parse(worker_sync.external_system_params)["pull_job"]
+      already_running = (worker_system == SYSTEM_NAME &&
+        worker_method_name == method_name &&
+        worker_sync_id != sync_id)
+      if already_running
         puts ">>> #{SYSTEM_NAME.titleize} #{method_name} skipping as worker already running ..."
         return true
       end
@@ -79,7 +87,10 @@ module IdentitySpoke
 
   def self.fetch_new_messages(sync_id, force: false)
     ## Do not run method if another worker is currently processing this method
-    yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
+    if self.worker_currently_running?(__method__.to_s, sync_id)
+      yield 0, {}, {}, true
+      return
+    end
 
     started_at = DateTime.now
     last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '2019-01-01 00:00:00')
@@ -188,7 +199,10 @@ module IdentitySpoke
 
   def self.fetch_new_opt_outs(sync_id, force: false)
     ## Do not run method if another worker is currently processing this method
-    yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
+    if self.worker_currently_running?(__method__.to_s, sync_id)
+      yield 0, {}, {}, true
+      return
+    end
 
     if Settings.spoke.subscription_id
       started_at = DateTime.now
@@ -245,7 +259,10 @@ module IdentitySpoke
 
   def self.fetch_active_campaigns(sync_id, force: false)
     ## Do not run method if another worker is currently processing this method
-    yield 0, {}, {}, true if self.worker_currenly_running?(__method__.to_s)
+    if self.worker_currently_running?(__method__.to_s, sync_id)
+      yield 0, {}, {}, true
+      return
+    end
 
     active_campaigns = IdentitySpoke::Campaign.active
 
