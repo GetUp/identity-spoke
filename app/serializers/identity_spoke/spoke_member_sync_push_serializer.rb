@@ -35,6 +35,9 @@ module IdentitySpoke
           representative_name: area.representative_name
         }
       }
+      @object.member_external_ids.each{ |external_id|
+        data[external_id.system + "_id"] = external_id.external_id
+      }
       data.to_json
     end
 
