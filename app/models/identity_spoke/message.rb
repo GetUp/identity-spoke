@@ -1,13 +1,9 @@
 module IdentitySpoke
   class Message < ReadOnly
     self.table_name = "message"
-    belongs_to :assignment
-    belongs_to :campaign_contact
-    has_many :survey_results
-
-    def user
-      assignment.user
-    end
+    belongs_to :user, optional: true
+    belongs_to :assignment, optional: true
+    belongs_to :campaign_contact, optional: true
 
     scope :updated_messages, -> (last_created_at) {
       where('message.send_status != ?', 'ERROR')
