@@ -12,15 +12,19 @@ group :development, :test do
   gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
   gem 'rspec-rails'
   gem 'rspec-mocks'
-  gem 'database_cleaner'
+  gem 'database_cleaner-active_record'
+  gem 'database_cleaner-redis'
   gem 'factory_bot_rails'
   gem 'rubocop', require: false
   gem 'pry'
   gem 'pry-rails'
   gem 'pry-byebug'
   gem 'spring-commands-rspec'
+
+  # Identity requirements
   gem 'sidekiq'
   gem 'sidekiq-batch'
   gem 'sidekiq-limit_fetch'
   gem 'sidekiq-unique-jobs'
+  gem 'zip'
 end

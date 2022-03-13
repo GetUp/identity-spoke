@@ -5,7 +5,7 @@ ENV['RAILS_ENV'] ||= 'test'
 # This is normally done as part of Rails boot. We need it earlier in test to
 # ensure ENV['DATABASE_URL'] is set so we cab infer external database URLs next
 require 'dotenv'
-Dotenv.load('.env.test')
+Dotenv.load('spec/test_identity_app/.env.test')
 
 # This needs to be done once ENV['DATABASE_URL'] is set, and before
 #  environment.rb is required, since that triggers Settings.load! which copies
@@ -57,13 +57,11 @@ RSpec.configure do |config|
 
   config.before(:suite) do
     # Speed up tests by using :transaction
-    DatabaseCleaner.strategy = :transaction
+    DatabaseCleaner[:active_record].strategy = :transaction
     # And clean initially using :truncation
-    DatabaseCleaner.clean_with(:truncation)
+    DatabaseCleaner[:active_record].clean_with(:truncation)
     # Enable redis cleaning too (:truncation is the only option)
-    DatabaseCleaner[:redis].strategy = :truncation
-    # And clean initially
-    DatabaseCleaner[:redis].clean
+    DatabaseCleaner[:redis].strategy = :deletion
   end
 
   config.around(:each) do |example|

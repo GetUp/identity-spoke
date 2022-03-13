@@ -1,7 +1,7 @@
 module IdentitySpoke
   FactoryBot.define do
     factory :spoke_user, class: User do
-      auth0_id { Faker::Number.number(10) }
+      auth0_id { Faker::Number.number(digits: 10) }
       first_name { 'Super' }
       last_name { 'Vollie' }
       cell { "+61411222333" }

@@ -27,7 +27,7 @@ module IdentitySpoke
           serializer: SpokeMemberSyncPushSerializer,
           campaign_id: external_campaign_id
         ).as_json
-        write_result_count = CampaignContact.add_members(rows)
+        write_result_count = CampaignContact.add_members(external_campaign_id, rows)
 
         yield batch_index, write_result_count
       end
@@ -168,17 +168,19 @@ module IdentitySpoke
 
     ## Find or create the contact campaign
     contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign_contact.campaign_id, system: SYSTEM_NAME)
-    contact_campaign.update_attributes!(name: campaign_contact.campaign.title, contact_type: CONTACT_TYPE)
+    contact_campaign.update!(name: campaign_contact.campaign.title, contact_type: CONTACT_TYPE)
 
     ## Find or create the contact
     contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
-    contact.update_attributes!(contactee: contactee,
-                              contactor: contactor,
-                              contact_campaign: contact_campaign,
-                              contact_type: CONTACT_TYPE,
-                              happened_at: message.created_at,
-                              status: message.send_status,
-                              notes: message.is_from_contact ? 'inbound' : 'outbound')
+    contact.update!(
+      contactee: contactee,
+      contactor: contactor,
+      contact_campaign: contact_campaign,
+      contact_type: CONTACT_TYPE,
+      happened_at: message.created_at,
+      status: message.send_status,
+      notes: message.is_from_contact ? 'inbound' : 'outbound'
+    )
     contact.reload
 
     ## Loop over all of the campaign contacts question responses if message is not from contact

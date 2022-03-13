@@ -24,8 +24,13 @@ module IdentitySpoke
 
     def custom_fields
       data = @object.flattened_custom_fields
-      data['address'] = @object.address
-      data['postcode'] = @object.postcode
+      data['postcode'] = @object.postcode if @object.postcode
+      data['address'] = {
+        line1: @object.address.line1,
+        line2: @object.address.line2,
+        suburb: @object.address.town,
+        postcode: @object.address.postcode,
+      } if @object.address
       data["areas"] = @object.areas.each_with_index.map{|area, index|
         {
           name: area.name,
@@ -34,7 +39,7 @@ module IdentitySpoke
           party: area.party,
           representative_name: area.representative_name
         }
-      }
+      } if @object.areas.each_with_index.count > 0
       data.to_json
     end
 

@@ -101,22 +101,6 @@ class Initial < ActiveRecord::Migration[4.2]
     t.index ["system", "external_id"], name: "index_member_external_ids_on_system_and_external_id", unique: true
   end
 
-  create_table "member_subscriptions", id: :serial, force: :cascade do |t|
-    t.integer "subscription_id", null: false
-    t.integer "member_id", null: false
-    t.datetime "unsubscribed_at"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-    t.text "unsubscribe_reason"
-    t.text "subscribe_reason"
-    t.boolean "permanent"
-    t.integer "unsubscribe_mailing_id"
-    t.index ["member_id", "subscription_id"], name: "index_member_subscriptions_on_member_id_and_subscription_id", unique: true
-    t.index ["member_id"], name: "index_member_subscriptions_on_member_id"
-    t.index ["subscription_id"], name: "index_member_subscriptions_on_subscription_id"
-    t.index ["unsubscribe_mailing_id"], name: "index_member_subscriptions_on_unsubscribe_mailing_id"
-  end
-
   create_table "members", force: :cascade do |t|
     t.integer "cons_id"
     t.text "email"
@@ -179,6 +163,39 @@ class Initial < ActiveRecord::Migration[4.2]
     t.text "permission_slug"
     t.datetime "created_at"
     t.datetime "updated_at"
+  end
+
+  create_table "member_subscriptions", id: :serial, force: :cascade do |t|
+    t.integer "subscription_id", null: false
+    t.integer "member_id", null: false
+    t.datetime "unsubscribed_at"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.text "unsubscribe_reason"
+    t.boolean "permanent"
+    t.integer "unsubscribe_mailing_id"
+    t.string "subscribe_reason"
+    t.datetime "subscribed_at"
+    t.index ["member_id", "subscription_id"], name: "index_member_subscriptions_on_member_id_and_subscription_id", unique: true
+    t.index ["member_id"], name: "index_member_subscriptions_on_member_id"
+    t.index ["subscription_id"], name: "index_member_subscriptions_on_subscription_id"
+    t.index ["unsubscribe_mailing_id"], name: "index_member_subscriptions_on_unsubscribe_mailing_id"
+    t.index ["unsubscribed_at"], name: "index_member_subscriptions_on_unsubscribed_at"
+  end
+
+  create_table "addresses", force: :cascade do |t|
+    t.integer "member_id", null: false
+    t.text "line1"
+    t.text "line2"
+    t.text "town"
+    t.text "postcode"
+    t.text "country"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.integer "canonical_address_id"
+    t.string "state"
+    t.index ["canonical_address_id"], name: "index_addresses_on_canonical_address_id"
+    t.index ["member_id"], name: "index_addresses_on_member_id"
   end
 
   create_table "phone_numbers", force: :cascade do |t|
@@ -251,6 +268,40 @@ class Initial < ActiveRecord::Migration[4.2]
     t.index ["member_id"], name: "index_custom_fields_on_member_id"
   end
 
+  create_table "anonymization_log", force: :cascade do |t|
+    t.bigint "member_id", null: false
+    t.text "reason", null: false
+    t.json "external_ids"
+    t.datetime "anonymization_started_at", null: false
+    t.datetime "anonymization_finished_at"
+    t.index ["member_id"], name: "index_anonymization_log_on_member_id"
+  end
+
+  create_table "area_memberships", force: :cascade do |t|
+    t.integer "area_id", null: false
+    t.integer "member_id", null: false
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.index ["area_id"], name: "index_area_memberships_on_area_id"
+    t.index ["member_id"], name: "index_area_memberships_on_member_id"
+  end
+
+  create_table "areas", force: :cascade do |t|
+    t.text "name"
+    t.text "code"
+    t.integer "mapit"
+    t.text "area_type"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.text "party"
+    t.text "runner_up_party"
+    t.integer "majority"
+    t.integer "vote_count"
+    t.text "representative_name"
+    t.text "representative_gender"
+    t.string "representative_identifier"
+  end
+
   create_table "syncs", force: :cascade do |t|
     t.string "external_system", null: false
     t.string "external_system_params"
@@ -268,5 +319,56 @@ class Initial < ActiveRecord::Migration[4.2]
     t.index ["author_id"], name: "index_syncs_on_author_id"
     t.index ["contact_campaign_id"], name: "index_syncs_on_contact_campaign_id"
     t.index ["list_id"], name: "index_syncs_on_list_id"
+  end
+
+
+  create_table "event_rsvps", id: :serial, force: :cascade do |t|
+    t.integer "event_id", null: false
+    t.integer "member_id", null: false
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.datetime "deleted_at"
+    t.boolean "attended"
+    t.json "data", default: "{}"
+    t.index ["event_id"], name: "index_event_rsvps_on_event_id"
+    t.index ["member_id"], name: "index_event_rsvps_on_member_id"
+  end
+
+  create_table "events", force: :cascade do |t|
+    t.text "name"
+    t.datetime "start_time"
+    t.datetime "end_time"
+    t.text "description"
+    t.integer "campaign_id"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.integer "host_id"
+    t.integer "controlshift_event_id"
+    t.text "location"
+    t.float "latitude"
+    t.float "longitude"
+    t.integer "attendees"
+    t.integer "group_id"
+    t.integer "area_id"
+    t.text "image_url"
+    t.boolean "approved", default: false, null: false
+    t.boolean "invite_only", default: false, null: false
+    t.integer "max_attendees"
+    t.integer "external_id"
+    t.text "technical_type"
+    t.string "system"
+    t.string "subsystem"
+    t.json "data", default: "{}"
+    t.index ["area_id"], name: "index_events_on_area_id"
+    t.index ["campaign_id"], name: "index_events_on_campaign_id"
+    t.index ["external_id", "system", "subsystem"], name: "index_events_on_external_source", unique: true
+    t.index ["external_id"], name: "index_events_on_external_id"
+    t.index ["host_id"], name: "index_events_on_host_id"
+    t.index ["technical_type"], name: "index_events_on_technical_type"
+  end
+
+  create_table "events_members", force: :cascade do |t|
+    t.integer "event_id"
+    t.integer "member_id"
   end
 end

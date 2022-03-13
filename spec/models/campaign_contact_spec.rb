@@ -16,14 +16,15 @@ describe IdentitySpoke::CampaignContact do
     end
 
     it 'has inserted the correct campaign contacts to Spoke' do
-      IdentitySpoke::CampaignContact.add_members(@rows)
+      IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, @rows)
       expect(@spoke_campaign.campaign_contacts.count).to eq(2)
-      expect(@spoke_campaign.campaign_contacts.find_by_cell("+#{@member.mobile}").first_name).to eq(@member.first_name) # Spoke allows external IDs to be text
+      expect(@spoke_campaign.campaign_contacts.find_by_cell("+#{@member.phone_numbers.mobile.first.phone}").first_name).to eq(@member.first_name) # Spoke allows external IDs to be text
     end
 
     it "doesn't insert duplicates into Spoke" do
+      puts @rows
       2.times do |index|
-        IdentitySpoke::CampaignContact.add_members(@rows)
+        IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, @rows)
       end
       expect(@spoke_campaign.campaign_contacts.count).to eq(2)
       expect(@spoke_campaign.campaign_contacts.select('distinct cell').count).to eq(2)
@@ -35,10 +36,18 @@ describe IdentitySpoke::CampaignContact do
       let!(:user) { FactoryBot.create(:spoke_user) }
       let!(:campaign) { FactoryBot.create(:spoke_campaign, organization: organization) }
       let!(:assignment) { FactoryBot.create(:spoke_assignment, user: user, campaign: campaign) }
-      let!(:opt_out) { FactoryBot.create(:spoke_opt_out, cell: "+#{member.mobile}", assignment: assignment, organization: organization) }
+      let!(:opt_out) {
+        FactoryBot.create(
+          :spoke_opt_out,
+          cell: "+#{member.phone_numbers.mobile.first.phone}",
+          assignment: assignment,
+          organization: organization
+        )
+      }
 
       it 'should not insert the campaign contact' do
         inserted_records = IdentitySpoke::CampaignContact.add_members(
+          @spoke_campaign.id,
           ActiveModel::Serializer::CollectionSerializer.new(
             [member],
             serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
