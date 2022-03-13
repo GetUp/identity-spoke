@@ -27,7 +27,7 @@ module IdentitySpoke
           serializer: SpokeMemberSyncPushSerializer,
           campaign_id: external_campaign_id
         ).as_json
-        write_result_count = CampaignContact.add_members(rows)
+        write_result_count = CampaignContact.add_members(external_campaign_id, rows)
 
         yield batch_index, write_result_count
       end
