@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    identity_spoke (2.1.0)
+    identity_spoke (3.0.0)
       active_model_serializers
       pg
       rails
