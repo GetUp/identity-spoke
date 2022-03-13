@@ -1,7 +1,6 @@
 module IdentitySpoke
-  class Assignment < ApplicationRecord
+  class Assignment < ReadOnly
     self.table_name = "assignment"
-    include ReadOnly
     has_one :opt_out
     has_many :campaign_contacts
     belongs_to :user

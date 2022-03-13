@@ -1,6 +1,5 @@
 module IdentitySpoke
-  class CampaignContact < ApplicationRecord
-    include ReadWrite
+  class CampaignContact < ReadWrite
     include ConnectionExtension
     self.table_name = "campaign_contact"
     belongs_to :campaign

@@ -1,6 +1,5 @@
 module IdentitySpoke
-  class Message < ApplicationRecord
-    include ReadOnly
+  class Message < ReadOnly
     self.table_name = "message"
     belongs_to :assignment
     belongs_to :campaign_contact

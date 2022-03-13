@@ -1,7 +1,6 @@
 module IdentitySpoke
-  class OptOut < ApplicationRecord
+  class OptOut < ReadOnly
     self.table_name = "opt_out"
-    include ReadOnly
     belongs_to :assignment
     belongs_to :organization
 
