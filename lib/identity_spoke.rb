@@ -93,7 +93,7 @@ module IdentitySpoke
     end
 
     started_at = DateTime.now
-    last_created_at = Time.parse($redis.with { |r| r.get 'spoke:messages:last_created_at' } || '2019-01-01 00:00:00')
+    last_created_at = Time.parse(Sidekiq.redis { |r| r.get 'spoke:messages:last_created_at' } || '2019-01-01 00:00:00')
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at)
     updated_messages_all = Message.updated_messages_all(force ? DateTime.new() : last_created_at)
 
@@ -103,7 +103,7 @@ module IdentitySpoke
     end
 
     unless updated_messages.empty?
-      $redis.with { |r| r.set 'spoke:messages:last_created_at', updated_messages.last.created_at }
+      Sidekiq.redis { |r| r.set 'spoke:messages:last_created_at', updated_messages.last.created_at }
     end
 
     execution_time_seconds = ((DateTime.now - started_at) * 24 * 60 * 60).to_i
@@ -208,7 +208,7 @@ module IdentitySpoke
 
     if Settings.spoke.subscription_id
       started_at = DateTime.now
-      last_created_at = Time.parse($redis.with { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
+      last_created_at = Time.parse(Sidekiq.redis { |r| r.get 'spoke:opt_outs:last_created_at' } || '1970-01-01 00:00:00')
       updated_opt_outs = IdentitySpoke::OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at)
       updated_opt_outs_all = IdentitySpoke::OptOut.updated_opt_outs_all(force ? DateTime.new() : last_created_at)
 
@@ -218,7 +218,7 @@ module IdentitySpoke
       end
 
       unless updated_opt_outs.empty?
-        $redis.with { |r| r.set 'spoke:opt_outs:last_created_at', updated_opt_outs.last.created_at }
+        Sidekiq.redis { |r| r.set 'spoke:opt_outs:last_created_at', updated_opt_outs.last.created_at }
       end
 
       execution_time_seconds = ((DateTime.now - started_at) * 24 * 60 * 60).to_i
