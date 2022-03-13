@@ -224,7 +224,13 @@ module IdentitySpoke
       end
 
       unless updated_opt_outs.empty?
-        Sidekiq.redis { |r| r.set 'spoke:opt_outs:last_created_at', updated_opt_outs.last.created_at }
+        Sidekiq.redis { |r|
+          # Use to_s(:inspect) here since Spoke stores timestamps with
+          # millisecond precision, but plain [Date]Time.to_s will
+          # truncate the milliseconds, leading to the most recent call
+          # allways being re-sync'ed.
+          r.set 'spoke:opt_outs:last_created_at', updated_opt_outs.last.created_at.utc.to_s(:inspect)
+        }
       end
 
       execution_time_seconds = ((DateTime.now - started_at) * 24 * 60 * 60).to_i
