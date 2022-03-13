@@ -12,14 +12,14 @@ module IdentitySpoke
 
     scope :updated_messages, -> (last_created_at) {
       where('message.send_status != ?', 'ERROR')
-      .where('message.created_at >= ?', last_created_at)
+      .where('message.created_at > ?', last_created_at)
       .order('message.created_at')
       .limit(Settings.spoke.pull_batch_amount)
     }
 
     scope :updated_messages_all, -> (last_created_at) {
       where('message.send_status != ?', 'ERROR')
-      .where('message.created_at >= ?', last_created_at)
+      .where('message.created_at > ?', last_created_at)
     }
   end
 end
