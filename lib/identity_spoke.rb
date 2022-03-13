@@ -146,7 +146,7 @@ module IdentitySpoke
         lastname: campaign_contact.last_name,
         member_id: campaign_contact.external_id
       },
-      entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+      entry_point: "#{SYSTEM_NAME}",
       ignore_name_change: false
     )
 
@@ -162,7 +162,7 @@ module IdentitySpoke
         firstname: user.first_name,
         lastname: user.last_name
       },
-      entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+      entry_point: "#{SYSTEM_NAME}",
       ignore_name_change: false
     )
 
@@ -228,7 +228,7 @@ module IdentitySpoke
               lastname: campaign_contact.last_name,
               member_id: campaign_contact.external_id
             },
-            entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+            entry_point: "#{SYSTEM_NAME}",
             ignore_name_change: false
           )
           subscription = Subscription.find(Settings.spoke.subscription_id)
