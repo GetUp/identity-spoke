@@ -3,6 +3,7 @@ module IdentitySpoke
     include ReadOnly
     self.table_name = "message"
     belongs_to :assignment
+    belongs_to :campaign_contact
     has_many :survey_results
 
     def user
