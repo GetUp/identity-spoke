@@ -1,7 +1,6 @@
 module IdentitySpoke
-  class Organization < ApplicationRecord
+  class Organization < ReadOnly
     self.table_name = "organization"
-    include ReadOnly
     has_many :campaigns
     has_many :opt_outs
   end

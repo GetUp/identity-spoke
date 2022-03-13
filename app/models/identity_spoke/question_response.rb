@@ -1,7 +1,6 @@
 module IdentitySpoke
-  class QuestionResponse < ApplicationRecord
+  class QuestionResponse < ReadOnly
     self.table_name = "question_response"
-    include ReadOnly
     belongs_to :campaign_contact
     belongs_to :interaction_step
   end

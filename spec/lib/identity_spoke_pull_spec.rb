@@ -18,14 +18,6 @@ describe IdentitySpoke do
 
   context 'fetching new messages' do
 
-    before(:all) do
-      Sidekiq::Testing.inline!
-    end
-
-    after(:all) do
-      Sidekiq::Testing.fake!
-    end
-
     before(:each) do
       clean_external_database
       $redis.reset
@@ -372,7 +364,7 @@ describe IdentitySpoke do
     end
 
     it 'should update the last_created_at' do
-      old_created_at = $redis.with { |r| r.get 'spoke:messages:last_created_at' }
+      old_created_at = Sidekiq.redis { |r| r.get 'spoke:messages:last_created_at' }
       sleep 2
       spoke_assignment = FactoryBot.create(
         :spoke_assignment,
@@ -398,20 +390,12 @@ describe IdentitySpoke do
         user_number: @spoke_user.cell
       )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
-      new_created_at = $redis.with { |r| r.get 'spoke:messages:last_created_at' }
+      new_created_at = Sidekiq.redis { |r| r.get 'spoke:messages:last_created_at' }
       expect(new_created_at).not_to eq(old_created_at)
     end
   end
 
   context 'fetching new opt outs' do
-
-    before(:all) do
-      Sidekiq::Testing.inline!
-    end
-
-    after(:all) do
-      Sidekiq::Testing.fake!
-    end
 
     before(:each) do
       clean_external_database
@@ -468,14 +452,6 @@ describe IdentitySpoke do
   end
 
   context '#fetch_active_campaigns' do
-
-    before(:all) do
-      Sidekiq::Testing.inline!
-    end
-
-    after(:all) do
-      Sidekiq::Testing.fake!
-    end
 
     before(:each) do
       clean_external_database

@@ -1,7 +1,7 @@
 module IdentitySpoke
-  class User < ApplicationRecord
+  class User < ReadOnly
     self.table_name = "user"
-    include ReadOnly
-    has_many :assignments
+    has_many :assignment
+    has_many :message
   end
 end
