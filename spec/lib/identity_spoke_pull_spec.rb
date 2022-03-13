@@ -43,28 +43,67 @@ describe IdentitySpoke do
       @interaction_step2 = FactoryBot.create(:spoke_interaction_step, campaign: @spoke_campaign, question: 'favorite_party')
       3.times do |n|
         n += 1
-        campaign_contact = FactoryBot.create(:spoke_campaign_contact, first_name: "Bob#{n}", cell: "+6142770040#{n}", campaign: @spoke_campaign)
-        spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
-        FactoryBot.create(:spoke_message_delivered, created_at: @time, id: n, assignment: spoke_assignment, user_number: @spoke_user.cell, contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
-        FactoryBot.create(:spoke_message_errored, created_at: @time, id: n+3, assignment: spoke_assignment, user_number: @spoke_user.cell, contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
-        FactoryBot.create(:spoke_response_delivered, created_at: @time, id: n+6, assignment: spoke_assignment, user_number: @spoke_user.cell, contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
-        FactoryBot.create(:spoke_question_response, value: 'yes', interaction_step: @interaction_step1, campaign_contact: campaign_contact)
-        FactoryBot.create(:spoke_question_response, value: 'no', interaction_step: @interaction_step2, campaign_contact: campaign_contact)
-        FactoryBot.create(:spoke_question_response, value: 'maybe', interaction_step: @interaction_step2, campaign_contact: campaign_contact)
+        spoke_assignment = FactoryBot.create(
+          :spoke_assignment,
+          user: @spoke_user,
+          campaign: @spoke_campaign
+        )
+        campaign_contact = FactoryBot.create(
+          :spoke_campaign_contact,
+          assignment: spoke_assignment,
+          first_name: "Bob#{n}",
+          cell: "+6142770040#{n}",
+          campaign: @spoke_campaign
+        )
+        FactoryBot.create(
+          :spoke_message_delivered,
+          id: n,
+          created_at: @time,
+          assignment: spoke_assignment,
+          campaign_contact_id: campaign_contact.id,
+          user_id: @spoke_user.id,
+          user_number: @spoke_user.cell,
+          contact_number: campaign_contact.cell
+        )
+        FactoryBot.create(
+          :spoke_message_errored,
+          id: n+3,
+          created_at: @time,
+          assignment: spoke_assignment,
+          campaign_contact_id: campaign_contact.id,
+          user_id: @spoke_user.id,
+          user_number: @spoke_user.cell,
+          contact_number: campaign_contact.cell
+        )
+        FactoryBot.create(
+          :spoke_response_delivered,
+          id: n+6,
+          created_at: @time,
+          assignment: spoke_assignment,
+          campaign_contact_id: campaign_contact.id,
+          user_id: @spoke_user.id,
+          user_number: @spoke_user.cell,
+          contact_number: campaign_contact.cell
+        )
+        FactoryBot.create(
+          :spoke_question_response,
+          value: 'yes',
+          interaction_step: @interaction_step1,
+          campaign_contact: campaign_contact
+        )
+        FactoryBot.create(
+          :spoke_question_response,
+          value: 'no',
+          interaction_step: @interaction_step2,
+          campaign_contact: campaign_contact
+        )
+        FactoryBot.create(
+          :spoke_question_response,
+          value: 'maybe',
+          interaction_step: @interaction_step2,
+          campaign_contact: campaign_contact
+        )
       end
-    end
-
-    it "should skip and notify if campaign_contact phone can't be matched" do
-      IdentitySpoke::Message.all.destroy_all
-
-      campaign_contact = FactoryBot.create(:spoke_campaign_contact, cell: '+61481565899', campaign: @spoke_campaign)
-      spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
-      message = FactoryBot.create(:spoke_message_delivered, id: IdentitySpoke::Message.maximum(:id).to_i + 1, created_at: @time, assignment: spoke_assignment, send_status: 'DELIVERED', user_number: @spoke_user.cell, contact_number: '+61481565811')
-
-      expect(Notify).to receive(:warning)
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
-
-      expect(Contact.count).to eq(0)
     end
 
     it 'should create new members if none exist' do
@@ -90,10 +129,24 @@ describe IdentitySpoke do
 
     it 'should match existing members for campaign contacts and user' do
       IdentitySpoke::CampaignContact.all.each do |campaign_contact|
-        Member.upsert_member(phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }], firstname: campaign_contact.first_name, lastname: campaign_contact.last_name)
+        UpsertMember.call(
+          {
+            firstname: campaign_contact.first_name,
+            lastname: campaign_contact.last_name,
+            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }]
+          },
+          entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+        )
       end
       user = IdentitySpoke::User.last
-      Member.upsert_member(phones: [{ phone: user.cell.sub(/^[+]*/,'') }], firstname: user.first_name, lastname: user.last_name)
+      UpsertMember.call(
+        {
+          firstname: user.first_name,
+          lastname: user.last_name,
+          phones: [{ phone: user.cell.sub(/^[+]*/,'') }]
+        },
+        entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+      )
 
       IdentitySpoke.fetch_new_messages(@sync_id) {}
       expect(Member.count).to eq(4)
@@ -144,9 +197,29 @@ describe IdentitySpoke do
     end
 
     it 'should create contact with a landline number set' do
-      campaign_contact = FactoryBot.create(:spoke_campaign_contact, first_name: 'HomeBoy', cell: '+61727700400', campaign: @spoke_campaign)
-      spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
-      message = FactoryBot.create(:spoke_message_delivered, created_at: @time, id: '123', assignment: spoke_assignment, send_status: 'DELIVERED', contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
+      spoke_assignment = FactoryBot.create(
+        :spoke_assignment,
+        user: @spoke_user,
+        campaign: @spoke_campaign
+      )
+      campaign_contact = FactoryBot.create(
+        :spoke_campaign_contact,
+        first_name: 'HomeBoy',
+        cell: '+61727700400',
+        campaign: @spoke_campaign,
+        assignment: spoke_assignment
+      )
+      message = FactoryBot.create(
+        :spoke_message_delivered,
+        id: '123',
+        created_at: @time,
+        send_status: 'DELIVERED',
+        assignment: spoke_assignment,
+        campaign_contact_id: campaign_contact.id,
+        contact_number: campaign_contact.cell,
+        user_id: @spoke_user.id,
+        user_number: @spoke_user.cell
+      )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
       expect(Contact.where(external_id: '123').first).to have_attributes(status: 'DELIVERED')
       expect(Contact.where(external_id: '123').first.happened_at.utc.to_s).to eq(@time.utc.to_s)
@@ -154,9 +227,28 @@ describe IdentitySpoke do
     end
 
     it 'should create contact if there is no name st' do
-      campaign_contact = FactoryBot.create(:spoke_campaign_contact, cell: '+61427700409', campaign: @spoke_campaign)
-      spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
-      message = FactoryBot.create(:spoke_message_delivered, id: IdentitySpoke::Message.maximum(:id).to_i + 1, created_at: @time, assignment: spoke_assignment, send_status: 'DELIVERED', user_number: @spoke_user.cell, contact_number: campaign_contact.cell)
+      spoke_assignment = FactoryBot.create(
+        :spoke_assignment,
+        user: @spoke_user,
+        campaign: @spoke_campaign
+      )
+      campaign_contact = FactoryBot.create(
+        :spoke_campaign_contact,
+        cell: '+61427700409',
+        campaign: @spoke_campaign,
+        assignment: spoke_assignment
+      )
+      message = FactoryBot.create(
+        :spoke_message_delivered,
+        id: IdentitySpoke::Message.maximum(:id).to_i + 1,
+        created_at: @time,
+        send_status: 'DELIVERED',
+        assignment: spoke_assignment,
+        campaign_contact_id: campaign_contact.id,
+        contact_number: campaign_contact.cell,
+        user_id: @spoke_user.id,
+        user_number: @spoke_user.cell,
+      )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
       expect(Contact.last.contactee.phone).to eq('61427700409')
     end
@@ -190,19 +282,70 @@ describe IdentitySpoke do
 
     it 'should correctly not duplicate Survey Results' do
       ## Create the members
-      campaign_contact_member1 = Member.upsert_member(phones: [{ phone: "61427700401" }], firstname: "Bob1")
-      campaign_contact_member2 = Member.upsert_member(phones: [{ phone: "61427700402" }], firstname: "Bob2")
-      campaign_contact_member3 = Member.upsert_member(phones: [{ phone: "61427700403" }], firstname: "Bob3")
-      user_member = Member.upsert_member(phones: [{ phone: @spoke_user.cell.sub(/^[+]*/,'') }], firstname: @spoke_user.first_name)
+      campaign_contact_member1 = UpsertMember.call(
+        {
+          firstname: "Bob1",
+          phones: [{ phone: "61427700401" }]
+        },
+        entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+      )
+      campaign_contact_member2 = UpsertMember.call(
+        {
+          firstname: "Bob2",
+          phones: [{ phone: "61427700402" }]
+        },
+        entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+      )
+      campaign_contact_member3 = UpsertMember.call(
+        {
+          firstname: "Bob3",
+          phones: [{ phone: "61427700403" }]
+        },
+        entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+      )
+      user_member = UpsertMember.call(
+        {
+          firstname: @spoke_user.first_name,
+          phones: [{ phone: @spoke_user.cell.sub(/^[+]*/,'') }]
+        },
+        entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+      )
       ## Create the campaign
-      contact_campaign = FactoryBot.create(:contact_campaign, name: @spoke_campaign.title, external_id: @spoke_campaign.id)
+      contact_campaign = FactoryBot.create(
+        :contact_campaign,
+        name: @spoke_campaign.title,
+        external_id: @spoke_campaign.id
+      )
       ## Create the contacts
-      contact1 = FactoryBot.create(:contact, external_id: 1, contactee: campaign_contact_member1, contactor: user_member)
-      contact2 = FactoryBot.create(:contact, external_id: 2, contactee: campaign_contact_member2, contactor: user_member)
-      contact3 = FactoryBot.create(:contact, external_id: 3, contactee: campaign_contact_member3, contactor: user_member)
+      contact1 = FactoryBot.create(
+        :contact,
+        external_id: 1,
+        contactee: campaign_contact_member1,
+        contactor: user_member
+      )
+      contact2 = FactoryBot.create(
+        :contact,
+        external_id: 2,
+        contactee: campaign_contact_member2,
+        contactor: user_member
+      )
+      contact3 = FactoryBot.create(
+        :contact,
+        external_id: 3,
+        contactee: campaign_contact_member3,
+        contactor: user_member
+      )
       ## Create the contact response keys
-      contact_response_key1 = FactoryBot.create(:contact_response_key, key: @interaction_step1.question, contact_campaign: contact_campaign)
-      contact_response_key2 = FactoryBot.create(:contact_response_key, key: @interaction_step2.question, contact_campaign: contact_campaign)
+      contact_response_key1 = FactoryBot.create(
+        :contact_response_key,
+        key: @interaction_step1.question,
+        contact_campaign: contact_campaign
+      )
+      contact_response_key2 = FactoryBot.create(
+        :contact_response_key,
+        key: @interaction_step2.question,
+        contact_campaign: contact_campaign
+      )
       ## Create the contact responses
       3.times do |n|
         n += 1
@@ -213,7 +356,16 @@ describe IdentitySpoke do
 
       spoke_assignment = IdentitySpoke::Assignment.first
       campaign_contact = IdentitySpoke::CampaignContact.first
-      FactoryBot.create(:spoke_message_delivered, created_at: @time, id: 123456, assignment: spoke_assignment, user_number: @spoke_user.cell, contact_number: campaign_contact.cell)
+      FactoryBot.create(
+        :spoke_message_delivered,
+        id: 123456,
+        created_at: @time,
+        assignment: spoke_assignment,
+        campaign_contact_id: campaign_contact.id,
+        contact_number: campaign_contact.cell,
+        user_id: @spoke_user.id,
+        user_number: @spoke_user.cell,
+      )
 
       IdentitySpoke.fetch_new_messages(@sync_id) {}
       expect(ContactResponse.count).to eq(9)
@@ -222,9 +374,29 @@ describe IdentitySpoke do
     it 'should update the last_created_at' do
       old_created_at = $redis.with { |r| r.get 'spoke:messages:last_created_at' }
       sleep 2
-      campaign_contact = FactoryBot.create(:spoke_campaign_contact, first_name: 'BobNo', cell: '+61427700408', campaign: @spoke_campaign)
-      spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
-      message = FactoryBot.create(:spoke_message_delivered, id: IdentitySpoke::Message.maximum(:id).to_i + 1, created_at: @time, assignment: spoke_assignment, send_status: 'DELIVERED', user_number: @spoke_user.cell, contact_number: campaign_contact.cell)
+      spoke_assignment = FactoryBot.create(
+        :spoke_assignment,
+        user: @spoke_user,
+        campaign: @spoke_campaign
+      )
+      campaign_contact = FactoryBot.create(
+        :spoke_campaign_contact,
+        first_name: 'BobNo',
+        cell: '+61427700408',
+        campaign: @spoke_campaign,
+        assignment: spoke_assignment
+      )
+      message = FactoryBot.create(
+        :spoke_message_delivered,
+        id: IdentitySpoke::Message.maximum(:id).to_i + 1,
+        created_at: @time,
+        send_status: 'DELIVERED',
+        assignment: spoke_assignment,
+        campaign_contact_id: campaign_contact.id,
+        contact_number: campaign_contact.cell,
+        user_id: @spoke_user.id,
+        user_number: @spoke_user.cell
+      )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
       new_created_at = $redis.with { |r| r.get 'spoke:messages:last_created_at' }
       expect(new_created_at).not_to eq(old_created_at)
@@ -260,10 +432,35 @@ describe IdentitySpoke do
       member.update_phone_number('61427700409')
       member.subscribe_to(@subscription)
       expect(member.is_subscribed_to?(@subscription)).to eq(true)
-      campaign_contact = FactoryBot.create(:spoke_campaign_contact, first_name: 'BobNo', cell: '+61427700409', campaign: @spoke_campaign)
-      spoke_assignment = FactoryBot.create(:spoke_assignment, campaign_contacts: [campaign_contact], user: @spoke_user, campaign: @spoke_campaign)
-      spoke_opt_out = FactoryBot.create(:spoke_opt_out, cell: campaign_contact.cell, organization: @spoke_organization, assignment: spoke_assignment)
-      message = FactoryBot.create(:spoke_message_delivered, id: IdentitySpoke::Message.maximum(:id).to_i + 1, created_at: @time, assignment: spoke_assignment, send_status: 'DELIVERED', contact_number: campaign_contact.cell, user_number: @spoke_user.cell)
+      spoke_assignment = FactoryBot.create(
+        :spoke_assignment,
+        user: @spoke_user,
+        campaign: @spoke_campaign
+      )
+      campaign_contact = FactoryBot.create(
+        :spoke_campaign_contact,
+        first_name: 'BobNo',
+        cell: '+61427700409',
+        campaign: @spoke_campaign,
+        assignment: spoke_assignment
+      )
+      spoke_opt_out = FactoryBot.create(
+        :spoke_opt_out,
+        cell: campaign_contact.cell,
+        organization: @spoke_organization,
+        assignment: spoke_assignment
+      )
+      message = FactoryBot.create(
+        :spoke_message_delivered,
+        id: IdentitySpoke::Message.maximum(:id).to_i + 1,
+        created_at: @time,
+        assignment: spoke_assignment,
+        send_status: 'DELIVERED',
+        contact_number: campaign_contact.cell,
+        campaign_contact_id: campaign_contact.id,
+        user_id: @spoke_user.id,
+        user_number: @spoke_user.cell
+      )
       IdentitySpoke.fetch_new_opt_outs(@sync_id) {}
       member.reload
       expect(member.is_subscribed_to?(@subscription)).to eq(false)

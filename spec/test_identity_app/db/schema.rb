@@ -2,22 +2,71 @@
 # of editing this file, please use the migrations feature of Active Record to
 # incrementally modify your database, and then regenerate this schema definition.
 #
-# Note that this schema.rb definition is the authoritative source for your
-# database schema. If you need to create the application database on another
-# system, you should be using db:schema:load, not running all the migrations
-# from scratch. The latter is a flawed and unsustainable approach (the more migrations
-# you'll amass, the slower it'll run and the greater likelihood for issues).
+# This file is the source Rails uses to define your schema when running `bin/rails
+# db:schema:load`. When creating a new database, `bin/rails db:schema:load` tends to
+# be faster and is potentially less error prone than running all of your
+# migrations from scratch. Old migrations may fail to apply correctly if those
+# migrations use external dependencies or application code.
 #
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema.define(version: 0) do
 
   # These are extensions that must be enabled in order to support this database
-  enable_extension "plpgsql"
-  enable_extension "pg_trgm"
   enable_extension "btree_gin"
   enable_extension "btree_gist"
   enable_extension "intarray"
+  enable_extension "pg_trgm"
+  enable_extension "plpgsql"
+
+  create_table "addresses", force: :cascade do |t|
+    t.integer "member_id", null: false
+    t.text "line1"
+    t.text "line2"
+    t.text "town"
+    t.text "postcode"
+    t.text "country"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.integer "canonical_address_id"
+    t.string "state"
+    t.index ["canonical_address_id"], name: "index_addresses_on_canonical_address_id"
+    t.index ["member_id"], name: "index_addresses_on_member_id"
+  end
+
+  create_table "anonymization_log", force: :cascade do |t|
+    t.bigint "member_id", null: false
+    t.text "reason", null: false
+    t.json "external_ids"
+    t.datetime "anonymization_started_at", null: false
+    t.datetime "anonymization_finished_at"
+    t.index ["member_id"], name: "index_anonymization_log_on_member_id"
+  end
+
+  create_table "area_memberships", force: :cascade do |t|
+    t.integer "area_id", null: false
+    t.integer "member_id", null: false
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.index ["area_id"], name: "index_area_memberships_on_area_id"
+    t.index ["member_id"], name: "index_area_memberships_on_member_id"
+  end
+
+  create_table "areas", force: :cascade do |t|
+    t.text "name"
+    t.text "code"
+    t.integer "mapit"
+    t.text "area_type"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.text "party"
+    t.text "runner_up_party"
+    t.integer "majority"
+    t.integer "vote_count"
+    t.text "representative_name"
+    t.text "representative_gender"
+    t.string "representative_identifier"
+  end
 
   create_table "contact_campaigns", id: :serial, force: :cascade do |t|
     t.text "name"
@@ -59,6 +108,7 @@ ActiveRecord::Schema.define(version: 0) do
     t.datetime "happened_at"
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.json "data", default: "{}"
     t.index ["contact_campaign_id"], name: "index_contacts_on_contact_campaign_id"
     t.index ["contact_type"], name: "index_contacts_on_contact_type"
     t.index ["contactee_id"], name: "index_contacts_on_contactee_id"
@@ -100,6 +150,56 @@ ActiveRecord::Schema.define(version: 0) do
     t.datetime "updated_at"
   end
 
+  create_table "event_rsvps", id: :serial, force: :cascade do |t|
+    t.integer "event_id", null: false
+    t.integer "member_id", null: false
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.datetime "deleted_at"
+    t.boolean "attended"
+    t.json "data", default: "{}"
+    t.index ["event_id"], name: "index_event_rsvps_on_event_id"
+    t.index ["member_id"], name: "index_event_rsvps_on_member_id"
+  end
+
+  create_table "events", force: :cascade do |t|
+    t.text "name"
+    t.datetime "start_time"
+    t.datetime "end_time"
+    t.text "description"
+    t.integer "campaign_id"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.integer "host_id"
+    t.integer "controlshift_event_id"
+    t.text "location"
+    t.float "latitude"
+    t.float "longitude"
+    t.integer "attendees"
+    t.integer "group_id"
+    t.integer "area_id"
+    t.text "image_url"
+    t.boolean "approved", default: false, null: false
+    t.boolean "invite_only", default: false, null: false
+    t.integer "max_attendees"
+    t.integer "external_id"
+    t.text "technical_type"
+    t.string "system"
+    t.string "subsystem"
+    t.json "data", default: "{}"
+    t.index ["area_id"], name: "index_events_on_area_id"
+    t.index ["campaign_id"], name: "index_events_on_campaign_id"
+    t.index ["external_id", "system", "subsystem"], name: "index_events_on_external_source", unique: true
+    t.index ["external_id"], name: "index_events_on_external_id"
+    t.index ["host_id"], name: "index_events_on_host_id"
+    t.index ["technical_type"], name: "index_events_on_technical_type"
+  end
+
+  create_table "events_members", force: :cascade do |t|
+    t.integer "event_id"
+    t.integer "member_id"
+  end
+
   create_table "list_members", id: :serial, force: :cascade do |t|
     t.integer "list_id", null: false
     t.integer "member_id", null: false
@@ -138,13 +238,15 @@ ActiveRecord::Schema.define(version: 0) do
     t.datetime "created_at"
     t.datetime "updated_at"
     t.text "unsubscribe_reason"
-    t.text "subscribe_reason"
     t.boolean "permanent"
     t.integer "unsubscribe_mailing_id"
+    t.string "subscribe_reason"
+    t.datetime "subscribed_at"
     t.index ["member_id", "subscription_id"], name: "index_member_subscriptions_on_member_id_and_subscription_id", unique: true
     t.index ["member_id"], name: "index_member_subscriptions_on_member_id"
     t.index ["subscription_id"], name: "index_member_subscriptions_on_subscription_id"
     t.index ["unsubscribe_mailing_id"], name: "index_member_subscriptions_on_unsubscribe_mailing_id"
+    t.index ["unsubscribed_at"], name: "index_member_subscriptions_on_unsubscribed_at"
   end
 
   create_table "members", force: :cascade do |t|
@@ -267,7 +369,7 @@ ActiveRecord::Schema.define(version: 0) do
     t.bigint "list_id"
     t.bigint "contact_campaign_id"
     t.bigint "author_id"
-    t.json "reference_data", default: '{}'
+    t.json "reference_data", default: "{}"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["author_id"], name: "index_syncs_on_author_id"

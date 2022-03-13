@@ -3,10 +3,9 @@ module IdentitySpoke
     factory :spoke_message, class: Message do
       is_from_contact { false }
       text { Faker::GreekPhilosophers.quote }
-      service_response { Faker::Book.title }
       service { Faker::Book.title }
-      service_id { Faker::Number.number(10) }
-      send_status { '' }
+      service_id { Faker::Number.number(digits: 10) }
+      send_status { 'NOT_ATTEMPTED' }
 
       factory :spoke_message_delivered do
         send_status { 'DELIVERED' }

@@ -31,6 +31,7 @@ module ExternalDatabaseHelpers
     end
 
     def clean
+      Address.all.destroy_all
       PhoneNumber.all.destroy_all
       ListMember.all.destroy_all
       List.all.destroy_all
@@ -47,10 +48,10 @@ module ExternalDatabaseHelpers
       IdentitySpoke::QuestionResponse.all.destroy_all
       IdentitySpoke::InteractionStep.all.destroy_all
       IdentitySpoke::Message.all.destroy_all
+      IdentitySpoke::CampaignContact.all.destroy_all
       IdentitySpoke::OptOut.all.destroy_all
       IdentitySpoke::Assignment.all.destroy_all
       IdentitySpoke::User.all.destroy_all
-      IdentitySpoke::CampaignContact.all.destroy_all
       IdentitySpoke::Campaign.all.destroy_all
       IdentitySpoke::Organization.all.destroy_all
     end
