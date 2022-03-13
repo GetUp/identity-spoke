@@ -18,14 +18,6 @@ describe IdentitySpoke do
 
   context 'fetching new messages' do
 
-    before(:all) do
-      Sidekiq::Testing.inline!
-    end
-
-    after(:all) do
-      Sidekiq::Testing.fake!
-    end
-
     before(:each) do
       clean_external_database
       $redis.reset
@@ -405,14 +397,6 @@ describe IdentitySpoke do
 
   context 'fetching new opt outs' do
 
-    before(:all) do
-      Sidekiq::Testing.inline!
-    end
-
-    after(:all) do
-      Sidekiq::Testing.fake!
-    end
-
     before(:each) do
       clean_external_database
       $redis.reset
@@ -468,14 +452,6 @@ describe IdentitySpoke do
   end
 
   context '#fetch_active_campaigns' do
-
-    before(:all) do
-      Sidekiq::Testing.inline!
-    end
-
-    after(:all) do
-      Sidekiq::Testing.fake!
-    end
 
     before(:each) do
       clean_external_database

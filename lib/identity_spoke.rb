@@ -62,11 +62,11 @@ module IdentitySpoke
         worker_method_name == method_name &&
         worker_sync_id != sync_id)
       if already_running
-        puts ">>> #{SYSTEM_NAME.titleize} #{method_name} skipping as worker already running ..."
+        Rails.logger.info "#{SYSTEM_NAME.titleize} #{method_name} skipping as worker already running"
         return true
       end
     end
-    puts ">>> #{SYSTEM_NAME.titleize} #{method_name} running ..."
+    Rails.logger.info "#{SYSTEM_NAME.titleize} #{method_name} running ..."
     return false
   end
 
@@ -97,10 +97,9 @@ module IdentitySpoke
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at)
     updated_messages_all = Message.updated_messages_all(force ? DateTime.new() : last_created_at)
 
-    iteration_method = force ? :find_each : :each
-    updated_messages.send(iteration_method) do |message|
-      self.delay(retry: false, queue: 'low').handle_new_message(sync_id, message.id)
-    end
+    updated_messages.each { |message|
+      handle_new_message(sync_id, message)
+    }
 
     unless updated_messages.empty?
       Sidekiq.redis { |r|
@@ -130,9 +129,8 @@ module IdentitySpoke
     )
   end
 
-  def self.handle_new_message(sync_id, message_id)
-    ## Get the message
-    message = IdentitySpoke::Message.find(message_id)
+  def self.handle_new_message(sync_id, message)
+    Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling message: #{message.id}/#{message.created_at.utc.to_s(:inspect)}"
 
     ## Find who is the campaign contact for the message
     unless campaign_contact = IdentitySpoke::CampaignContact.find(message.campaign_contact_id)
@@ -173,8 +171,7 @@ module IdentitySpoke
     contactee = message.is_from_contact ? user_member : campaign_contact_member
 
     ## Find or create the contact campaign
-    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign_contact.campaign_id, system: SYSTEM_NAME)
-    contact_campaign.update!(name: campaign_contact.campaign.title, contact_type: CONTACT_TYPE)
+    contact_campaign = upsert_campaign(campaign_contact.campaign, false)
 
     ## Find or create the contact
     contact = Contact.find_or_initialize_by(external_id: message.id, system: SYSTEM_NAME)
@@ -183,6 +180,7 @@ module IdentitySpoke
       contactor: contactor,
       contact_campaign: contact_campaign,
       contact_type: CONTACT_TYPE,
+      created_at: message.created_at,
       happened_at: message.created_at,
       status: message.send_status,
       notes: message.is_from_contact ? 'inbound' : 'outbound'
@@ -218,11 +216,26 @@ module IdentitySpoke
       updated_opt_outs = IdentitySpoke::OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at)
       updated_opt_outs_all = IdentitySpoke::OptOut.updated_opt_outs_all(force ? DateTime.new() : last_created_at)
 
-      iteration_method = force ? :find_each : :each
-      updated_opt_outs.send(iteration_method) do |opt_out|
-        self.delay(retry: false, queue: 'low').handle_new_opt_out(sync_id, opt_out.id)
-      end
+      updated_opt_outs.each { |opt_out|
+        Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_s(:inspect)}"
 
+        campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
+        if campaign_contact
+          contactee = UpsertMember.call(
+            {
+              phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
+              firstname: campaign_contact.first_name,
+              lastname: campaign_contact.last_name,
+              member_id: campaign_contact.external_id
+            },
+            entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
+            ignore_name_change: false
+          )
+          subscription = Subscription.find(Settings.spoke.subscription_id)
+          contactee.unsubscribe_from(subscription, reason: 'spoke:opt_out', event_time: DateTime.now) if contactee
+        end
+      }
+      
       unless updated_opt_outs.empty?
         Sidekiq.redis { |r|
           # Use to_s(:inspect) here since Spoke stores timestamps with
@@ -252,25 +265,6 @@ module IdentitySpoke
     end
   end
 
-  def self.handle_new_opt_out(sync_id, opt_out_id)
-    opt_out = IdentitySpoke::OptOut.find(opt_out_id)
-    campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
-    if campaign_contact
-      contactee = UpsertMember.call(
-        {
-          phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
-          firstname: campaign_contact.first_name,
-          lastname: campaign_contact.last_name,
-          member_id: campaign_contact.external_id
-        },
-        entry_point: "#{SYSTEM_NAME}:#{__method__.to_s}",
-        ignore_name_change: false
-      )
-      subscription = Subscription.find(Settings.spoke.subscription_id)
-      contactee.unsubscribe_from(subscription, reason: 'spoke:opt_out', event_time: DateTime.now) if contactee
-    end
-  end
-
   def self.fetch_active_campaigns(sync_id, force: false)
     ## Do not run method if another worker is currently processing this method
     if self.worker_currently_running?(__method__.to_s, sync_id)
@@ -279,12 +273,10 @@ module IdentitySpoke
     end
 
     active_campaigns = IdentitySpoke::Campaign.active
-
-    iteration_method = force ? :find_each : :each
-
-    active_campaigns.send(iteration_method) do |campaign|
-      self.delay(retry: false, queue: 'low').handle_campaign(sync_id, campaign.id)
-    end
+    active_campaigns.each { |campaign|
+      Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Updating campaign #{campaign.id}"
+      upsert_campaign(campaign, true)
+    }
 
     yield(
       active_campaigns.size,
@@ -294,15 +286,30 @@ module IdentitySpoke
     )
   end
 
-  def self.handle_campaign(sync_id, campaign_id)
-    campaign = IdentitySpoke::Campaign.find(campaign_id)
+  private
 
-    contact_campaign = ContactCampaign.find_or_initialize_by(external_id: campaign.id, system: SYSTEM_NAME)
-    contact_campaign.update!(name: campaign.title, contact_type: CONTACT_TYPE)
+  def self.upsert_campaign(spoke_campaign, update_campaign)
+    contact_campaign = ContactCampaign.find_or_initialize_by(
+      external_id: spoke_campaign.id,
+      system: SYSTEM_NAME
+    )
 
-    campaign.interaction_steps.each do |interaction_step|
-      contact_response_key = ContactResponseKey.find_or_initialize_by(key: interaction_step.question, contact_campaign: contact_campaign)
-      contact_response_key.save! if contact_response_key.new_record?
+    if contact_campaign.new_record? || update_campaign
+      contact_campaign.update!(
+        name: spoke_campaign.title,
+        created_at: spoke_campaign.created_at,
+        contact_type: CONTACT_TYPE
+      )
+
+      spoke_campaign.interaction_steps.each do |interaction_step|
+        contact_response_key = ContactResponseKey.find_or_initialize_by(
+          key: interaction_step.question,
+          contact_campaign: contact_campaign
+        )
+        contact_response_key.save! if contact_response_key.new_record?
+      end
     end
+
+    contact_campaign
   end
 end
