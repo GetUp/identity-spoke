@@ -35,7 +35,6 @@ describe IdentitySpoke::SpokeMemberSyncPushSerializer do
         serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
         campaign_id: @spoke_campaign.id
       ).as_json
-      puts rows, @member.phone_numbers.pluck(:phone)
       expect(rows.first[:cell]).to eq('+61427700500')
     end
 

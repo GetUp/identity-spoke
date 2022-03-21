@@ -22,7 +22,6 @@ describe IdentitySpoke::CampaignContact do
     end
 
     it "doesn't insert duplicates into Spoke" do
-      puts @rows
       2.times do |index|
         IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, @rows)
       end
