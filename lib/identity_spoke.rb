@@ -133,8 +133,10 @@ module IdentitySpoke
     Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling message: #{message.id}/#{message.created_at.utc.to_s(:inspect)}"
 
     ## Find who is the campaign contact for the message
-    unless campaign_contact = IdentitySpoke::CampaignContact.find(message.campaign_contact_id)
-      Notify.warning "Spoke: CampaignContact Find Failed", "campaign_id: #{message.campaign_contact_id}, cell: #{message.contact_number}"
+    campaign_contact_id = message.campaign_contact_id
+    campaign_contact = IdentitySpoke::CampaignContact.find(campaign_contact_id) if campaign_contact_id
+    if !campaign_contact
+      Rails.logger.warn "#{SYSTEM_NAME.titleize} #{sync_id}: No campaign contact for message #{message.id}"
       return
     end
 

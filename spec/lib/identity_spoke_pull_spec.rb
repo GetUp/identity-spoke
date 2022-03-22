@@ -161,6 +161,25 @@ describe IdentitySpoke do
       expect(Contact.where(notes: 'outbound').count).to eq(3)
     end
 
+    context('message without a campaign contact and assignment') do
+      before(:each) do
+        @message = FactoryBot.create(
+          :spoke_message_delivered,
+          id: 10000,
+          created_at: Time.now,
+          assignment: nil,
+          campaign_contact_id: nil,
+          user_id: nil,
+          user_number: '+61555123456',
+          contact_number: '+61555654321'
+        )
+      end
+       
+      it 'should gracefully handle processing the message' do
+        IdentitySpoke.handle_new_message(@sync_id, @message)
+      end
+    end
+
     context('with force=true passed as parameter') do
       ContactResponse.all.destroy_all
       Contact.all.destroy_all
