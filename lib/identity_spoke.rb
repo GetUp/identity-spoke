@@ -269,6 +269,9 @@ module IdentitySpoke
         },
         false
       )
+    else
+      Rails.logger.warn "#{SYSTEM_NAME.titleize} #{sync_id}: No subscription id configured, cannot import opt outs"
+      yield 0, {}, {}, false
     end
   end
 
