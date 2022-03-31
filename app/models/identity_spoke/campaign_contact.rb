@@ -23,11 +23,16 @@ module IdentitySpoke
     private
 
     def self.remove_exclusions_from_batch(campaign_id, batch)
-      cells = batch.map{|row| row[:cell] }
+      # Remove any duplicates in the same batch
+      batch = batch.uniq { |row| row[:cell] }
 
+      cells = batch.map{ |row| row[:cell] }
+
+      # Remove any already-opted-out phone numbers
       opted_out_cells = OptOut.where('cell in (?)', cells ).map{|opt_out| opt_out[:cell] }
       batch = batch.reject{|row| opted_out_cells.include?(row[:cell]) }
 
+      # Remove any phone numbers already in the campaign
       existing_cells = where('cell in (?)', cells)
                          .where('campaign_id = ?', campaign_id)
                          .map{|contact| contact[:cell] }

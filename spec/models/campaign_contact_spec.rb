@@ -21,12 +21,24 @@ describe IdentitySpoke::CampaignContact do
       expect(@spoke_campaign.campaign_contacts.find_by_cell("+#{@member.phone_numbers.mobile.first.phone}").first_name).to eq(@member.first_name) # Spoke allows external IDs to be text
     end
 
-    it "doesn't insert duplicates into Spoke" do
+    it "doesn't insert duplicates already existing into Spoke" do
       2.times do |index|
         IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, @rows)
       end
       expect(@spoke_campaign.campaign_contacts.count).to eq(2)
       expect(@spoke_campaign.campaign_contacts.select('distinct cell').count).to eq(2)
+    end
+
+    it "doesn't insert duplicates from the same batch into Spoke" do
+      double_up = ActiveModel::Serializer::CollectionSerializer.new(
+        [@member,@member],
+        serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
+        campaign_id: @spoke_campaign.id
+      ).as_json
+
+      IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, double_up)
+      expect(@spoke_campaign.campaign_contacts.count).to eq(1)
+      expect(@spoke_campaign.campaign_contacts.select('distinct cell').count).to eq(1)
     end
 
     context 'with an opt out for a campaign contact' do
