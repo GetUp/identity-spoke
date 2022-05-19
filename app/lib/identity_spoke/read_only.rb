@@ -1,6 +1,7 @@
 module IdentitySpoke
   class ReadOnly < ApplicationRecord
     self.abstract_class = true
-    establish_connection Settings.spoke.read_only_database_url if Settings.spoke.read_only_database_url
+    db_url_str = set_db_pool_size(Settings.spoke.read_only_database_url)
+    establish_connection db_url_str if db_url_str
   end
 end
