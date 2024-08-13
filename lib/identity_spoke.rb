@@ -150,7 +150,7 @@ module IdentitySpoke
     iteration_method = force ? :find_each : :each
 
     updated_opt_outs.send(iteration_method) do |opt_out|
-      Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_s(:inspect)}"
+      Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_fs(:inspect)}"
 
       campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
       if campaign_contact
@@ -260,7 +260,7 @@ module IdentitySpoke
   end
 
   def self.handle_new_message(sync_id, message)
-    Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling message: #{message.id}/#{message.created_at.utc.to_s(:inspect)}"
+    Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling message: #{message.id}/#{message.created_at.utc.to_fs(:inspect)}"
 
     ## Find who is the campaign contact for the message
     campaign_contact_id = message.campaign_contact_id
@@ -367,11 +367,11 @@ module IdentitySpoke
   end
 
   def self.set_redis_date(redis_identifier, date_time_value, as_mutex=false)
-    date_str = date_time_value.utc.to_s(:inspect) # Ensures fractional seconds are retained
+    date_str = date_time_value.utc.to_fs(:inspect) # Ensures fractional seconds are retained
     if as_mutex
-      Sidekiq.redis { |r| r.setnx redis_identifier, date_str }
+      Sidekiq.redis { |r| r.set(redis_identifier, date_str, :nx => true) }
     else
-      Sidekiq.redis { |r| r.set redis_identifier, date_str }
+      Sidekiq.redis { |r| r.set(redis_identifier, date_str) }
     end
   end
 

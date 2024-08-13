@@ -23,8 +23,12 @@ describe IdentitySpoke do
 
       @sync_id = 1
       @subscription = FactoryBot.create(:sms_subscription)
-      Settings.stub_chain(:spoke, :push_batch_amount) { nil }
-      Settings.stub_chain(:spoke, :pull_batch_amount) { nil }
+      allow(Settings).to(
+        receive_message_chain(:spoke, :push_batch_amount).and_return(nil)
+      )
+      allow(Settings).to(
+        receive_message_chain(:spoke, :pull_batch_amount).and_return(nil)
+      )
 
       @time = Time.now - 120.seconds
       @spoke_organization = FactoryBot.create(:spoke_organization)
@@ -419,9 +423,16 @@ describe IdentitySpoke do
       clean_external_database
       @sync_id = 1
       @subscription = FactoryBot.create(:sms_subscription)
-      Settings.stub_chain(:spoke, :subscription_id) { @subscription.id }
-      Settings.stub_chain(:spoke, :push_batch_amount) { nil }
-      Settings.stub_chain(:spoke, :pull_batch_amount) { nil }
+      allow(Settings).to(
+        receive_message_chain(:spoke, :subscription_id).and_return(@subscription.id)
+      )
+      allow(Settings).to(
+        receive_message_chain(:spoke, :push_batch_amount).and_return(nil)
+      )
+      allow(Settings).to(
+        receive_message_chain(:spoke, :pull_batch_amount).and_return(nil)
+      )
+
       @time = Time.now - 120.seconds
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, title: 'Test', organization: @spoke_organization)
