@@ -8,7 +8,7 @@ require "action_mailer/railtie"
 require "active_job/railtie"
 require "action_cable/engine"
 # require "rails/test_unit/railtie"
-require "sprockets/railtie"
+# require "sprockets/railtie"
 
 Bundler.require(*Rails.groups)
 require "identity_spoke"
@@ -23,4 +23,3 @@ module TestIdentityApp
     # -- all .rb files in that directory are automatically loaded.
   end
 end
-

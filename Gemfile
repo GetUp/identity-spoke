@@ -1,8 +1,11 @@
 source 'https://rubygems.org'
 
+ruby '>= 3.1.6'
+
 gemspec
-gem 'rails', '~> 6.1.0'
+gem 'rails', '~> 7.0.0'
 gem 'pg'
+gem 'redis'
 gem 'active_model_serializers'
 
 group :development, :test do

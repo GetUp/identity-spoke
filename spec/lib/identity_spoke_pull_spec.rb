@@ -20,7 +20,6 @@ describe IdentitySpoke do
 
     before(:each) do
       clean_external_database
-      $redis.reset
 
       @sync_id = 1
       @subscription = FactoryBot.create(:sms_subscription)
@@ -418,7 +417,6 @@ describe IdentitySpoke do
 
     before(:each) do
       clean_external_database
-      $redis.reset
       @sync_id = 1
       @subscription = FactoryBot.create(:sms_subscription)
       Settings.stub_chain(:spoke, :subscription_id) { @subscription.id }
