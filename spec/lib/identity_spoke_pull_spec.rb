@@ -19,7 +19,7 @@ describe IdentitySpoke do
 
     before(:each) do
       @sync_id = 1
-      @subscription = FactoryBot.create(:sms_subscription)
+      @subscription = Subscription::SMS_SUBSCRIPTION
       allow(Settings).to(
         receive_message_chain(:spoke, :push_batch_amount).and_return(nil)
       )
@@ -52,8 +52,8 @@ describe IdentitySpoke do
           id: n,
           created_at: @time,
           assignment: spoke_assignment,
-          campaign_contact_id: campaign_contact.id,
-          user_id: @spoke_user.id,
+          campaign_contact: campaign_contact,
+          user: @spoke_user,
           user_number: @spoke_user.cell,
           contact_number: campaign_contact.cell
         )
@@ -62,8 +62,8 @@ describe IdentitySpoke do
           id: n+3,
           created_at: @time,
           assignment: spoke_assignment,
-          campaign_contact_id: campaign_contact.id,
-          user_id: @spoke_user.id,
+          campaign_contact: campaign_contact,
+          user: @spoke_user,
           user_number: @spoke_user.cell,
           contact_number: campaign_contact.cell
         )
@@ -72,8 +72,8 @@ describe IdentitySpoke do
           id: n+6,
           created_at: @time,
           assignment: spoke_assignment,
-          campaign_contact_id: campaign_contact.id,
-          user_id: @spoke_user.id,
+          campaign_contact: campaign_contact,
+          user: @spoke_user,
           user_number: @spoke_user.cell,
           contact_number: campaign_contact.cell
         )
@@ -226,9 +226,9 @@ describe IdentitySpoke do
         created_at: @time,
         send_status: 'DELIVERED',
         assignment: spoke_assignment,
-        campaign_contact_id: campaign_contact.id,
+        campaign_contact: campaign_contact,
         contact_number: campaign_contact.cell,
-        user_id: @spoke_user.id,
+        user: @spoke_user,
         user_number: @spoke_user.cell
       )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
@@ -255,9 +255,9 @@ describe IdentitySpoke do
         created_at: @time,
         send_status: 'DELIVERED',
         assignment: spoke_assignment,
-        campaign_contact_id: campaign_contact.id,
+        campaign_contact: campaign_contact,
         contact_number: campaign_contact.cell,
-        user_id: @spoke_user.id,
+        user: @spoke_user,
         user_number: @spoke_user.cell,
       )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
@@ -372,9 +372,9 @@ describe IdentitySpoke do
         id: 123456,
         created_at: @time,
         assignment: spoke_assignment,
-        campaign_contact_id: campaign_contact.id,
+        campaign_contact: campaign_contact,
         contact_number: campaign_contact.cell,
-        user_id: @spoke_user.id,
+        user: @spoke_user,
         user_number: @spoke_user.cell,
       )
 
@@ -403,9 +403,9 @@ describe IdentitySpoke do
         created_at: @time,
         send_status: 'DELIVERED',
         assignment: spoke_assignment,
-        campaign_contact_id: campaign_contact.id,
+        campaign_contact: campaign_contact,
         contact_number: campaign_contact.cell,
-        user_id: @spoke_user.id,
+        user: @spoke_user,
         user_number: @spoke_user.cell
       )
       IdentitySpoke.fetch_new_messages(@sync_id) {}
@@ -418,7 +418,7 @@ describe IdentitySpoke do
 
     before(:each) do
       @sync_id = 1
-      @subscription = FactoryBot.create(:sms_subscription)
+      @subscription = Subscription::SMS_SUBSCRIPTION
       allow(Settings).to(
         receive_message_chain(:spoke, :subscription_id).and_return(@subscription.id)
       )
@@ -465,8 +465,8 @@ describe IdentitySpoke do
         assignment: spoke_assignment,
         send_status: 'DELIVERED',
         contact_number: campaign_contact.cell,
-        campaign_contact_id: campaign_contact.id,
-        user_id: @spoke_user.id,
+        campaign_contact: campaign_contact,
+        user: @spoke_user,
         user_number: @spoke_user.cell
       )
       IdentitySpoke.fetch_new_opt_outs(@sync_id) {}

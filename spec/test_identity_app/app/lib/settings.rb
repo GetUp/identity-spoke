@@ -2,17 +2,28 @@
 class Hash
   def method_missing(method, *opts)
     m = method.to_s
-    return self[m] if key?(m)
+    if m == 'opt_out_subscription_id'
+      return Subscription::SMS_SUBSCRIPTION.id
+    end
+    if key?(m)
+      return self[m]
+    end
     super
   end
 end
 
 class Settings
+  def self.app
+    return {
+      "inbound_url" => 'http://localhost',
+    }
+  end
+
   def self.spoke
     return {
       "database_url" => ENV['SPOKE_DATABASE_URL'],
-      "opt_out_subscription_id" => Subscription::SMS_SUBSCRIPTION,
       "read_only_database_url" => ENV['SPOKE_READ_ONLY_DATABASE_URL'],
+      "opt_out_subscription_id" => nil, # See above
       "push_batch_amount" => 10,
       "pull_batch_amount" => 10,
     }
