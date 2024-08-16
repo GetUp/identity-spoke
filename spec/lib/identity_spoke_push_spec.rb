@@ -3,8 +3,6 @@ require 'rails_helper'
 describe IdentitySpoke do
   context '#push' do
     before(:each) do
-      clean_external_database
-
       @sync_id = 1
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, organization: @spoke_organization)
@@ -32,8 +30,6 @@ describe IdentitySpoke do
 
   context '#push_in_batches' do
     before(:each) do
-      clean_external_database
-
       @sync_id = 1
       @spoke_organization = IdentitySpoke::Organization.create!(name: 'Torie Buster')
       @spoke_campaign = IdentitySpoke::Campaign.create!(title: 'Test campaign', description: 'progress', organization: @spoke_organization)

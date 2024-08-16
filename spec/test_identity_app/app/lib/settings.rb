@@ -11,8 +11,8 @@ class Settings
   def self.spoke
     return {
       "database_url" => ENV['SPOKE_DATABASE_URL'],
-      "read_only_database_url" => ENV['SPOKE_DATABASE_URL'],
       "opt_out_subscription_id" => Subscription::SMS_SUBSCRIPTION,
+      "read_only_database_url" => ENV['SPOKE_READ_ONLY_DATABASE_URL'],
       "push_batch_amount" => 10,
       "pull_batch_amount" => 10,
     }

@@ -1,8 +1,6 @@
 describe IdentitySpoke::CampaignContact do
   context '#add_members' do
     before(:each) do
-      clean_external_database
-
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, organization: @spoke_organization)
       @member = FactoryBot.create(:member_with_mobile)

@@ -3,7 +3,6 @@ require 'rails_helper'
 describe IdentitySpoke do
   context '#pull' do
     before(:each) do
-      clean_external_database
       @sync_id = 1
       @external_system_params = JSON.generate({'pull_job' => 'fetch_new_messages'})
     end
@@ -19,8 +18,6 @@ describe IdentitySpoke do
   context 'fetching new messages' do
 
     before(:each) do
-      clean_external_database
-
       @sync_id = 1
       @subscription = FactoryBot.create(:sms_subscription)
       allow(Settings).to(
@@ -420,7 +417,6 @@ describe IdentitySpoke do
   context 'fetching new opt outs' do
 
     before(:each) do
-      clean_external_database
       @sync_id = 1
       @subscription = FactoryBot.create(:sms_subscription)
       allow(Settings).to(
@@ -482,7 +478,6 @@ describe IdentitySpoke do
   context '#fetch_active_campaigns' do
 
     before(:each) do
-      clean_external_database
       @sync_id = 1
       spoke_organization = FactoryBot.create(:spoke_organization)
       2.times do
