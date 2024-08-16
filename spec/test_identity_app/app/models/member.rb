@@ -38,7 +38,8 @@ class Member < ApplicationRecord
   has_many :event_rsvps
   has_many :events, through: :event_rsvps
   has_many :hosted_events, class_name: 'Event', foreign_key: 'host_id'
-  has_and_belongs_to_many :areas, join_table: :area_memberships
+  has_many :area_memberships, dependent: :destroy
+  has_many :areas, through: :area_memberships
   has_many :group_members
   has_many :groups, through: :group_members
   has_many :journey_coordinators
@@ -82,6 +83,7 @@ class Member < ApplicationRecord
   has_many :notes, -> { order 'notes.created_at DESC' }
   has_many :notes_written, class_name: 'Note', foreign_key: 'user_id'
   has_many :follow_ups
+  has_many :follow_ups_by, class_name: 'FollowUp', foreign_key: 'contactee_id'
   has_many :member_volunteer_tasks
   has_many :volunteer_tasks, through: :member_volunteer_tasks
   has_many :call_sessions
@@ -176,14 +178,7 @@ class Member < ApplicationRecord
     not_active_regular_donor
   }
 
-  scope :subscribed_to_sms, -> {
-    joins(:member_subscriptions).where(member_subscriptions: {
-      subscription_id: Subscription::SMS_SUBSCRIPTION.id,
-      unsubscribed_at: nil
-    })
-  }
-
-  scope :subscribed_to, ->(subscription_slug) {
+  scope :subscriptions_with_slug, ->(subscription_slug) {
     joins(member_subscriptions: :subscription).where(member_subscriptions: {
       subscriptions: { slug: subscription_slug },
       unsubscribed_at: nil
@@ -300,20 +295,10 @@ class Member < ApplicationRecord
       country: new_address[:country],
     }
 
-    # If this user already has the canonical address among their addresses, touch it to make it their most recent. Otherwise insert it.
-    if (canonical_address = CanonicalAddress.search(address_attributes))
-      if (new_address = addresses.find_by(canonical_address: canonical_address))
-        new_address.touch!
-      else
-        new_address = addresses.create!(address_attributes.merge(canonical_address: canonical_address))
-      end
+    if (new_address = addresses.find_by(address_attributes))
+      new_address.touch!
     else
-      # If we can't match the address
-      if (new_address = addresses.find_by(address_attributes))
-        new_address.touch!
-      else
-        new_address = addresses.create!(address_attributes)
-      end
+      new_address = addresses.create!(address_attributes)
     end
 
     unless new_address.try(:id) == old_address_id
@@ -321,9 +306,6 @@ class Member < ApplicationRecord
       # inside a transaction, so in order to reduce retries inside
       # UpdateMemberAreasWorker we schedule it 5 seconds in the
       # future.
-      #
-      # TODO: figure out if update_areas even needs to happen
-      # inside a worker.
       UpdateMemberAreasWorker.perform_in(5.seconds, id)
       return true
     end
@@ -417,7 +399,19 @@ class Member < ApplicationRecord
 
   # Update the area memberships of member
   def update_areas
-    if (canonical_address = address.try(:canonical_address))
+    # First, find/verify the canonical address
+    if address.present?
+      address_attr = address.attributes.with_indifferent_access.slice(
+        :line1, :line2, :town, :postcode, :state, :country
+      )
+      canonical_address = CanonicalAddress.search(address_attr)
+      if canonical_address&.id != address.canonical_address&.id
+        address.canonical_address = canonical_address;
+        # Don't set updated_at to avoid changing address precedence
+        address.save!(touch: false)
+      end
+    end
+    if canonical_address
       areas = canonical_address.areas
     elsif (zip = Postcode.search(postcode))
       areas = AreaZip.where(zip: zip.zip).map(&:area)
@@ -441,6 +435,23 @@ class Member < ApplicationRecord
     areas = (areas ||= []).uniq
     self.areas.clear
     self.areas << (areas || [])
+
+    if Settings.geography.area_lookup.track_area_probabilities
+      self.area_memberships.each do |area_membership|
+        if zip
+          # If using the member's postcode/zip to determine their location, the probability
+          # that they are in each area is equal to the proportion of their postcode/zip
+          # the area represents.
+          prob = AreaZip.find_by(area: area_membership.area, zip: zip)&.proportion_of_zip
+        elsif canonical_address
+          # If the member's address is linked to a canonical address, the probability that they
+          # are in each associated area is 1.000 (100% certain!)
+          prob = 1.0
+        end
+        area_membership.probability = prob
+        area_membership.save!
+      end
+    end
 
     # TODO: Legacy mosaic code - delete once all orgs who use this have migrated to the newer, more flexible approach
     if mosaic
@@ -483,21 +494,111 @@ class Member < ApplicationRecord
     end
   end
 
-  def subscribe
-    subscribe_to(Subscription::EMAIL_SUBSCRIPTION) unless subscribed?
+  # Determines if the member is subscribed to at least one default subscription.
+  def subscribed?
+    subscribed = false
+    Subscription.defaults.each do |sub|
+      subscribed |= is_subscribed_to?(sub)
+    end
+    return subscribed
   end
 
-  def subscribe_to(subscription, reason: nil, event_time: DateTime.now, subscribable: nil)
+  # Determines if the member is subscribed to the given subscription.
+  def is_subscribed_to?(subscription)
+    member_sub = member_subscriptions.order(:updated_at).find_by(subscription: subscription)
+    return member_sub.present? && member_sub.is_subscribed?
+  end
+
+  # Determines if the member is permanently unsubscribed.
+  #
+  # A member is considered to be permanently described if permanently
+  # unsubscribed from all default subscriptions
+  def unsubscribed_permanently?
+    unsubscribed = !Subscription.defaults.empty?
+    Subscription.defaults.each do |sub|
+      unsubscribed &= is_unsubscribed_permanently_from?(sub)
+    end
+    return unsubscribed
+  end
+
+  # Determines if the member is permanently unsubscribed from the
+  # given subscription.
+  def is_unsubscribed_permanently_from?(subscription)
+    ms = member_subscriptions.find_by(subscription: subscription)
+    ms.present? && ms.unsubscribed_permanently?
+  end
+
+  # Subscribes member to all subscriptions marked as default
+  def subscribe(reason: nil, event_time: DateTime.now, subscribable: nil)
+    changed = false
+    Subscription.defaults.each do |sub|
+      if !is_subscribed_to?(sub)
+        changed |= subscribe_to(
+          sub, reason: reason, event_time: event_time, subscribable: subscribable
+        )
+      end
+    end
+    return changed
+  end
+
+  # Unsubscribes a member from all subscriptions
+  def unsubscribe(reason: nil,
+                  event_time: DateTime.now,
+                  subscribable: nil,
+                  unsub_mailing_id: nil,
+                  permanent: false)
+    changed = false
+
+    if permanent
+      # When permanently un-sub'ing, need to ensure all default subs
+      # are permanently unsub'ed.
+      Subscription.defaults do |sub|
+        changed |= unsubscribe_from(
+          sub,
+          reason: reason,
+          event_time: event_time,
+          subscribable: subscribable,
+          unsub_mailing_id: unsub_mailing_id,
+          permanent: true
+        )
+      end
+    end
+
+    member_subscriptions.each.map do |member_sub|
+      if member_sub.is_subscribed?
+        changed |= unsubscribe_from(
+          member_sub.subscription,
+          reason: reason,
+          event_time: event_time,
+          subscribable: subscribable,
+          unsub_mailing_id: unsub_mailing_id,
+          permanent: permanent
+        )
+      end
+    end
+
+    return changed
+  end
+
+  def subscribe_to(subscription,
+                   reason: nil,
+                   event_time: DateTime.now,
+                   subscribable: nil)
     return update_subscription(
       subscription,
       should_subscribe: true,
       event_time: event_time,
       operation_reason: reason,
-      subscribable: subscribable,
+      subscribable: subscribable
     )
   end
 
-  def unsubscribe_from(subscription, reason: nil, event_time: DateTime.now, subscribable: nil, unsub_mailing_id: nil, permanent: false)
+  def unsubscribe_from(subscription,
+                       reason: nil,
+                       event_time: DateTime.now,
+                       subscribable: nil,
+                       unsub_mailing_id: nil,
+                       permanent: false)
     return update_subscription(
       subscription,
       should_subscribe: false,
@@ -507,169 +608,6 @@ class Member < ApplicationRecord
       unsub_mailing_id: unsub_mailing_id,
       permanent: permanent
     )
-  end
-
-  # update_subscription is intended to be a single method to update subscriptions,
-  # which correctly handles old updates by checking the sub/unsub event is newer
-  # than the last time the subscription was updated before processing.
-  # Returns true if the subscription was updated, false if not (ie. old event)
-  def update_subscription(subscription, should_subscribe:, event_time:, operation_reason: nil, subscribable: nil, unsub_mailing_id: nil, permanent: false)
-    retried = false
-    begin
-      ms = self.member_subscriptions.find_or_initialize_by(subscription: subscription) do |member_sub|
-        # Ensure new records have the time of this event
-        member_sub.created_at = event_time
-        member_sub.updated_at = event_time
-      end
-
-      # Ensure record has attributes against subscribable and operation_reason
-      ms.subscribable = subscribable
-      ms.operation_reason = operation_reason
-
-      # Only process this event if it's newer than the previous sub/unsub event or it's a new subscription
-      if event_time > ms.updated_at || ms.new_record?
-        if unsubscribed_permanently?
-          return ms.update!(
-            subscribed_at: nil,
-            subscribe_reason: nil,
-            unsubscribed_at: event_time,
-            unsubscribe_reason: 'Deferred as permanently unsubscribed from email',
-            updated_at: event_time,
-            permanent: true
-          )
-        elsif ms.unsubscribed_permanently?
-          return ms.update!(
-            subscribed_at: nil,
-            subscribe_reason: nil,
-            unsubscribed_at: event_time,
-            unsubscribe_reason: 'Deferred as permanently unsubscribed',
-            updated_at: event_time,
-            permanent: true
-          )
-        elsif should_subscribe
-          return ms.update!(
-            subscribed_at: event_time,
-            subscribe_reason: (operation_reason || 'not specified'),
-            unsubscribed_at: nil,
-            unsubscribe_reason: nil,
-            updated_at: event_time
-          )
-        elsif !should_subscribe
-          return ms.update!(
-            subscribed_at: nil,
-            subscribe_reason: nil,
-            unsubscribed_at: event_time,
-            unsubscribe_reason: (operation_reason || 'not specified'),
-            unsubscribe_mailing_id: unsub_mailing_id,
-            updated_at: event_time,
-            permanent: permanent
-          )
-        end
-      end
-
-      return false
-    rescue ActiveRecord::RecordNotUnique
-      # Safe to always retry because there must be a DB-level unique constraint,
-      # meaning there cannot be any duplicates at the moment, so next try will
-      # find the existing record in find_or_initialize_by
-      retry
-    rescue ActiveRecord::RecordInvalid => e
-      # Retry AR uniquness validation errors once, could be race condition...
-      if !retried && e.record.errors.details.dig(:member, 0, :error) == :taken
-        retried = true
-        retry
-      else
-        # Already retried, likely to be duplicate data already in the db, abort
-        raise e
-      end
-    end
-  end
-
-  def is_subscribed_to?(subscription)
-    member_subscriptions.where(subscription: subscription, unsubscribed_at: nil).exists?
-  end
-
-  def permanently_unsubscribed_from?(subscription)
-    ms = member_subscriptions.find_by(subscription: subscription)
-    ms.present? && ms.unsubscribed_permanently?
-  end
-
-  def unsubscribe
-    unsubscribe_from(Subscription::EMAIL_SUBSCRIPTION) if subscribed?
-  end
-
-  def unsubscribe_permanently(reason: nil)
-    Subscription.defaults.find_each { |subscription| unsubscribe_from(subscription, permanent: true, reason: reason) }
-  end
-
-  def subscribe_email
-    subscribe_to(Subscription::EMAIL_SUBSCRIPTION)
-  end
-
-  def unsubscribe_email(permanent: false, reason: nil)
-    unsubscribe_from(Subscription::EMAIL_SUBSCRIPTION, permanent: permanent, reason: reason)
-  end
-
-  def subscribe_notifications
-    subscribe_to(Subscription::NOTIFICATION_SUBSCRIPTION)
-  end
-
-  def unsubscribe_notifications(permanent: false, reason: nil)
-    unsubscribe_from(Subscription::NOTIFICATION_SUBSCRIPTION, permanent: permanent, reason: reason)
-  end
-
-  def subscribe_text_blasts
-    subscribe_to(Subscription::SMS_SUBSCRIPTION)
-  end
-
-  def unsubscribe_text_blasts(permanent: false, reason: nil)
-    unsubscribe_from(Subscription::SMS_SUBSCRIPTION, permanent: permanent, reason: reason)
-  end
-
-  def subscribe_calling
-    subscribe_to(Subscription::CALLING_SUBSCRIPTION)
-  end
-
-  def unsubscribe_calling(permanent: false, reason: nil)
-    unsubscribe_from(Subscription::CALLING_SUBSCRIPTION, permanent: permanent, reason: reason)
-  end
-
-  def subscribe_facebook
-    subscribe_to(Subscription::FACEBOOK_SUBSCRIPTION)
-  end
-
-  def unsubscribe_facebook(permanent: false, reason: nil)
-    unsubscribe_from(Subscription::FACEBOOK_SUBSCRIPTION, permanent: permanent, reason: reason)
-  end
-
-  def subscribed?
-    # For legacy purposes I'm mantaining that a member is subscribed if and only if it's subscribed to emails
-    # In the future we probably want to change this into:
-    # subscribed_to_emails? or subscribed_to_notifications? or subscribed_to_text_blasts
-    subscribed_to_emails?
-  end
-
-  def subscribed_to_emails?
-    member_subscription = member_subscriptions.find_by(subscription: Subscription::EMAIL_SUBSCRIPTION)
-    member_subscription && member_subscription.unsubscribed_at.nil?
-  end
-
-  def subscribed_to_notifications?
-    member_subscription = member_subscriptions.find_by(subscription: Subscription::NOTIFICATION_SUBSCRIPTION)
-    member_subscription && member_subscription.unsubscribed_at.nil?
-  end
-
-  def subscribed_to_text_blasts?
-    member_subscription = member_subscriptions.find_by(subscription: Subscription::SMS_SUBSCRIPTION)
-    member_subscription && member_subscription.unsubscribed_at.nil?
-  end
-
-  def unsubscribed_permanently?
-    if (member_subscription = member_subscriptions.find_by(subscription: Subscription::EMAIL_SUBSCRIPTION))
-      return member_subscription.unsubscribed_permanently?
-    else
-      return false
-    end
   end
 
   # Merge another member record with this member record
@@ -864,10 +802,14 @@ class Member < ApplicationRecord
         member_hash[:custom_fields] = parse_custom_data(custom_data)
       end
 
-      member = UpsertMember.call(member_hash, entry_point: options.entry_point)
-
-      member.subscribe if options['create_email_subscription']
-      member.subscribe_text_blasts if options['create_text_subscription']
+      member = UpsertMember.call(
+        member_hash,
+        entry_point: options.entry_point,
+        new_member_opt_in: false # Allow import setttings to override the defaults
+      )
+      if options['create_subscriptions']
+        member.subscribe(reason: 'admin:csv_import')
+      end
 
       if options['add_to_list_id']
         ListMember.find_or_create_by!(member: member, list_id: options['list_id'])
@@ -1378,5 +1320,87 @@ class Member < ApplicationRecord
     )
 
     [member_data, member_summary]
+  end
+
+  # update_subscription is intended to be a single method to update subscriptions,
+  # which correctly handles old updates by checking the sub/unsub event is newer
+  # than the last time the subscription was updated before processing.
+  # Returns true if the subscription was updated, false if not (ie. old event)
+  def update_subscription(subscription,
+                          should_subscribe:,
+                          event_time:,
+                          operation_reason: nil,
+                          subscribable: nil,
+                          unsub_mailing_id: nil,
+                          permanent: false)
+    retried = false
+    begin
+      ms = self.member_subscriptions.find_or_initialize_by(subscription: subscription) do |member_sub|
+        # Ensure new records have the time of this event
+        member_sub.created_at = event_time
+        member_sub.updated_at = event_time
+      end
+
+      # Ensure record has attributes against subscribable and operation_reason
+      ms.subscribable = subscribable
+      ms.operation_reason = operation_reason
+
+      # Only process this event if it's newer than the previous sub/unsub event or it's a new subscription
+      if event_time > ms.updated_at || ms.new_record?
+        if unsubscribed_permanently?
+          return ms.update!(
+            subscribed_at: nil,
+            subscribe_reason: nil,
+            unsubscribed_at: event_time,
+            unsubscribe_reason: 'Deferred as permanently unsubscribed',
+            updated_at: event_time,
+            permanent: true
+          )
+        elsif ms.unsubscribed_permanently?
+          return ms.update!(
+            subscribed_at: nil,
+            subscribe_reason: nil,
+            unsubscribed_at: event_time,
+            unsubscribe_reason: 'Deferred as permanently unsubscribed from subscription',
+            updated_at: event_time,
+            permanent: true
+          )
+        elsif should_subscribe
+          return ms.update!(
+            subscribed_at: event_time,
+            subscribe_reason: (operation_reason || 'not specified'),
+            unsubscribed_at: nil,
+            unsubscribe_reason: nil,
+            updated_at: event_time
+          )
+        elsif !should_subscribe
+          return ms.update!(
+            subscribed_at: nil,
+            subscribe_reason: nil,
+            unsubscribed_at: event_time,
+            unsubscribe_reason: (operation_reason || 'not specified'),
+            unsubscribe_mailing_id: unsub_mailing_id,
+            updated_at: event_time,
+            permanent: permanent
+          )
+        end
+      end
+
+      return false
+    rescue ActiveRecord::RecordNotUnique
+      # Safe to always retry because there must be a DB-level unique constraint,
+      # meaning there cannot be any duplicates at the moment, so next try will
+      # find the existing record in find_or_initialize_by
+      retry
+    rescue ActiveRecord::RecordInvalid => e
+      # Retry AR uniquness validation errors once, could be race condition...
+      if !retried && e.record.errors.details.dig(:member, 0, :error) == :taken
+        retried = true
+        retry
+      else
+        # Already retried, likely to be duplicate data already in the db, abort
+        raise e
+      end
+    end
   end
 end

@@ -28,6 +28,10 @@ class MemberSubscription < ApplicationRecord
 
   validates_uniqueness_of :member, scope: :subscription
 
+  def is_subscribed?
+    unsubscribed_at.nil?
+  end
+
   def record_member_subscription_create_event
     record_member_subscription_event(action: 'create', subscription_status_changed: true)
   end
@@ -45,6 +49,14 @@ class MemberSubscription < ApplicationRecord
   end
 
   def record_member_subscription_event(action:, subscription_status_changed:)
+    operation = unsubscribed_at.nil? ? 'subscribe' : 'unsubscribe'
+    member_subscription_events.create!(
+      action: action,
+      operation: operation,
+      operation_reason: operation_reason,
+      subscription_status_changed: subscription_status_changed,
+      subscribable: subscribable
+    )
   end
 
   def latest_member_subscription_event
