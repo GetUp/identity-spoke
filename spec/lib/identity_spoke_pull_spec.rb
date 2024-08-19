@@ -4,11 +4,11 @@ describe IdentitySpoke do
   context '#pull' do
     before(:each) do
       @sync_id = 1
-      @external_system_params = JSON.generate({'pull_job' => 'fetch_new_messages'})
+      @external_system_params = JSON.generate({ 'pull_job' => 'fetch_new_messages' })
     end
 
     context 'with valid parameters' do
-      it 'should call the corresponding method'  do
+      it 'should call the corresponding method' do
         expect(IdentitySpoke).to receive(:fetch_new_messages).exactly(1).times.with(1)
         IdentitySpoke.pull(@sync_id, @external_system_params)
       end
@@ -16,7 +16,6 @@ describe IdentitySpoke do
   end
 
   context 'fetching new messages' do
-
     before(:each) do
       @sync_id = 1
       @subscription = Subscription::SMS_SUBSCRIPTION
@@ -59,7 +58,7 @@ describe IdentitySpoke do
         )
         FactoryBot.create(
           :spoke_message_errored,
-          id: n+3,
+          id: n + 3,
           created_at: @time,
           assignment: spoke_assignment,
           campaign_contact: campaign_contact,
@@ -69,7 +68,7 @@ describe IdentitySpoke do
         )
         FactoryBot.create(
           :spoke_response_delivered,
-          id: n+6,
+          id: n + 6,
           created_at: @time,
           assignment: spoke_assignment,
           campaign_contact: campaign_contact,
@@ -117,7 +116,7 @@ describe IdentitySpoke do
       expect(member).to have_attributes(first_name: 'Super', last_name: 'Vollie')
       expect(member.contacts_received.count).to eq(3)
       expect(member.contacts_made.count).to eq(3)
-    end    
+    end
 
     it 'should match existing members for campaign contacts and user' do
       IdentitySpoke::CampaignContact.all.each do |campaign_contact|
@@ -125,7 +124,7 @@ describe IdentitySpoke do
           {
             firstname: campaign_contact.first_name,
             lastname: campaign_contact.last_name,
-            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }]
+            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }]
           },
           entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
         )
@@ -135,7 +134,7 @@ describe IdentitySpoke do
         {
           firstname: user.first_name,
           lastname: user.last_name,
-          phones: [{ phone: user.cell.sub(/^[+]*/,'') }]
+          phones: [{ phone: user.cell.sub(/^[+]*/, '') }]
         },
         entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
       )
@@ -174,7 +173,7 @@ describe IdentitySpoke do
           contact_number: '+61555654321'
         )
       end
-       
+
       it 'should gracefully handle processing the message' do
         IdentitySpoke.handle_new_message(@sync_id, @message)
       end
@@ -194,8 +193,8 @@ describe IdentitySpoke do
     it 'should record contactee and contactor details on contact' do
       IdentitySpoke.fetch_new_messages(@sync_id) {}
       contact = Contact.find_by_external_id('1')
-      contactee = Member.find_by_phone(IdentitySpoke::Message.first.contact_number.sub(/^[+]*/,''))
-      contactor = Member.find_by_phone(@spoke_user.cell.sub(/^[+]*/,''))
+      contactee = Member.find_by_phone(IdentitySpoke::Message.first.contact_number.sub(/^[+]*/, ''))
+      contactor = Member.find_by_phone(@spoke_user.cell.sub(/^[+]*/, ''))
 
       expect(contact.contactee_id).to eq(contactee.id)
       expect(contact.contactor_id).to eq(contactor.id)
@@ -317,7 +316,7 @@ describe IdentitySpoke do
       user_member = UpsertMember.call(
         {
           firstname: @spoke_user.first_name,
-          phones: [{ phone: @spoke_user.cell.sub(/^[+]*/,'') }]
+          phones: [{ phone: @spoke_user.cell.sub(/^[+]*/, '') }]
         },
         entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
       )
@@ -415,7 +414,6 @@ describe IdentitySpoke do
   end
 
   context 'fetching new opt outs' do
-
     before(:each) do
       @sync_id = 1
       @subscription = Subscription::SMS_SUBSCRIPTION
@@ -476,7 +474,6 @@ describe IdentitySpoke do
   end
 
   context '#fetch_active_campaigns' do
-
     before(:each) do
       @sync_id = 1
       spoke_organization = FactoryBot.create(:spoke_organization)

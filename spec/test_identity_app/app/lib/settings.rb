@@ -8,6 +8,7 @@ class Hash
     if key?(m)
       return self[m]
     end
+
     super
   end
 end

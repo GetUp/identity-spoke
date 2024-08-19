@@ -12,7 +12,6 @@
 #
 
 class Area < ApplicationRecord
-
   has_many :area_zips
   has_many :area_memberships
   has_many :members, through: :area_memberships

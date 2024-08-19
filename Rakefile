@@ -17,10 +17,6 @@ end
 APP_RAKEFILE = File.expand_path("../spec/test_identity_app/Rakefile", __FILE__)
 load 'rails/tasks/engine.rake'
 
-
 load 'rails/tasks/statistics.rake'
 
-
-
 require 'bundler/gem_tasks'
-

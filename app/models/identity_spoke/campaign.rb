@@ -8,8 +8,8 @@ module IdentitySpoke
 
     scope :active, -> {
       where('is_started')
-      .where('not is_archived')
-      .order('created_at')
+        .where('not is_archived')
+        .order('created_at')
     }
   end
 end

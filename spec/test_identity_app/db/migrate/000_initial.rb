@@ -1,5 +1,4 @@
 class Initial < ActiveRecord::Migration[7.0]
-
   enable_extension "btree_gin"
   enable_extension "btree_gist"
   enable_extension "intarray"
@@ -1723,5 +1722,4 @@ class Initial < ActiveRecord::Migration[7.0]
   add_foreign_key "syncs", "members", column: "author_id"
   add_foreign_key "text_blast_links", "text_blasts"
   add_foreign_key "text_blasts", "lists"
-
 end

@@ -1,5 +1,4 @@
 class Initial < ActiveRecord::Migration[7.0]
-
   create_table "assignment", id: :serial, force: :cascade do |t|
     t.integer "user_id", null: false
     t.integer "campaign_id", null: false
@@ -352,5 +351,4 @@ class Initial < ActiveRecord::Migration[7.0]
   add_foreign_key "user_cell", "\"user\"", column: "user_id", name: "user_cell_user_id_foreign"
   add_foreign_key "user_organization", "\"user\"", column: "user_id", name: "user_organization_user_id_foreign"
   add_foreign_key "user_organization", "organization", name: "user_organization_organization_id_foreign"
-
 end

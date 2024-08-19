@@ -20,7 +20,7 @@ describe IdentitySpoke::CampaignContact do
     end
 
     it "doesn't insert duplicates already existing into Spoke" do
-      2.times do |index|
+      2.times do |_index|
         IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, @rows)
       end
       expect(@spoke_campaign.campaign_contacts.count).to eq(2)
@@ -29,7 +29,7 @@ describe IdentitySpoke::CampaignContact do
 
     it "doesn't insert duplicates from the same batch into Spoke" do
       double_up = ActiveModel::Serializer::CollectionSerializer.new(
-        [@member,@member],
+        [@member, @member],
         serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
         campaign_id: @spoke_campaign.id
       ).as_json

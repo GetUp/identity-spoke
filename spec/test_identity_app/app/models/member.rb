@@ -28,7 +28,6 @@
 require 'zip'
 
 class Member < ApplicationRecord
-
   # relationships
   belongs_to :role, optional: true
   has_many :list_members
@@ -180,9 +179,9 @@ class Member < ApplicationRecord
 
   scope :subscriptions_with_slug, ->(subscription_slug) {
     joins(member_subscriptions: :subscription).where(member_subscriptions: {
-      subscriptions: { slug: subscription_slug },
-      unsubscribed_at: nil
-    })
+                                                       subscriptions: { slug: subscription_slug },
+                                                       unsubscribed_at: nil
+                                                     })
   }
 
   scope :admins, -> {
@@ -764,8 +763,8 @@ class Member < ApplicationRecord
 
       member_hash = {
         emails: [{
-                   email: row['email']
-                 }],
+          email: row['email']
+        }],
         firstname: row['first_name'],
         middlenames: row['middle_names'],
         lastname: row['last_name']
@@ -883,8 +882,8 @@ class Member < ApplicationRecord
               if actions.length == 1
                 action = actions.first # if action only exists in a single language (or no language: legacy data)
               elsif actions.length > 1
-                Rails.logger.error "The member action [member_id: #{member.id}, external_id: #{payload[:external_id]}, "\
-                                   "technical_type: #{payload[:action_technical_type]}] contains no language code but"\
+                Rails.logger.error "The member action [member_id: #{member.id}, external_id: #{payload[:external_id]}, " \
+                                   "technical_type: #{payload[:action_technical_type]}] contains no language code but" \
                                    "the action already exists in more than one language"
 
                 # Still want to record an action, so first try to find a matching action with the default language

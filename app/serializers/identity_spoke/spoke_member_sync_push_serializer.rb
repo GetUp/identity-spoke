@@ -31,7 +31,7 @@ module IdentitySpoke
         suburb: @object.address.town,
         postcode: @object.address.postcode,
       } if @object.address
-      data["areas"] = @object.areas.each_with_index.map{|area, index|
+      data["areas"] = @object.areas.each_with_index.map { |area, _index|
         {
           name: area.name,
           code: area.code,

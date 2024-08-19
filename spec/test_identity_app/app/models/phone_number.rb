@@ -13,7 +13,6 @@
 #
 
 class PhoneNumber < ApplicationRecord
-
   before_save :find_phone_type
 
   belongs_to :member

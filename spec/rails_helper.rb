@@ -93,12 +93,12 @@ RSpec.configure do |config|
     DatabaseCleaner.cleaning do
       # Allow individual specs to do this when they need to via a method in
       # auth_helpers, which could also run `FactoryBot.create(:member_admin)`
-      #Role.create!(description: 'Admin')
+      # Role.create!(description: 'Admin')
       # Subscriptions that are assumed to exist for many tests
-      #[:email, :sms, :notification].each do |channel|
+      # [:email, :sms, :notification].each do |channel|
       #  FactoryBot.create(:"#{channel}_subscription")
-      #end
-      #ActiveRecord::Base.connection.execute("ALTER SEQUENCE subscriptions_id_seq RESTART WITH 4;")
+      # end
+      # ActiveRecord::Base.connection.execute("ALTER SEQUENCE subscriptions_id_seq RESTART WITH 4;")
       example.run
     end
   end
