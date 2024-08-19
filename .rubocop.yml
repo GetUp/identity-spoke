@@ -1,0 +1,136 @@
+require:
+  - rubocop-factory_bot
+  - rubocop-performance
+  - rubocop-rails
+  - rubocop-rspec
+  - rubocop-rspec_rails
+
+AllCops:
+  CacheRootDirectory: tmp/cache/
+  DisabledByDefault: true
+  Exclude:
+    - '**/bin/*'
+    - '**/node_modules/**/*'
+    - '**/tmp/**/*'
+    - '**/.git/**/*'
+    - '**/public/**/*'
+    - '**/rubocop_cache/**/*'
+    - '**/spec/test_identity_app/**/*'
+  NewCops: enable
+  TargetRubyVersion: 3.1.6
+
+Layout:
+  Enabled: true
+
+Layout/EndOfLine:
+  Enabled: false
+
+Layout/LineLength:
+  Enabled: false
+
+Layout/EmptyLinesAroundAttributeAccessor:
+  Enabled: true
+
+Layout/SpaceAroundMethodCallOperator:
+  Enabled: true
+
+Lint:
+  Enabled: true
+
+Lint/AmbiguousBlockAssociation:
+  # Exclude specs because rspec is deliberately using a special kind of block styling
+  Exclude:
+    - '**/spec/**/*'
+
+Lint/AssignmentInCondition:
+  # If you want to assign in the conditional then the condition must be surrounded with ()
+  AllowSafeAssignment: true
+
+Lint/DeprecatedOpenSSLConstant:
+  Enabled: true
+
+Lint/MixedRegexpCaptureTypes:
+  Enabled: true
+
+Lint/RaiseException:
+  Enabled: true
+
+Lint/StructNewOverride:
+  Enabled: true
+
+Lint/SuppressedException:
+  Enabled: false
+
+Performance:
+  Enabled: true
+
+# Note: Disabled because changing String#downcase & #== to #casecmp is breaking unicode-safe string comparison.
+Performance/Casecmp:
+  Enabled: false
+
+Style/AndOr:
+  # && / || instead of and / or
+  Enabled: true
+
+Style/ArrayJoin:
+  # use join instead of *
+  Enabled: true
+
+Style/DoubleNegation:
+  # Don't use cryptic !! syntax for checking not nil
+  Enabled: true
+
+Style/MutableConstant:
+  # Have to freeze potentially mutable constants
+  Enabled: true
+
+Style/Not:
+  # !x instead of (not x)
+  Enabled: true
+
+Naming/ClassAndModuleCamelCase:
+  Enabled: true
+
+Naming/ConstantName:
+  # SCREAMING_SNAKE_CASE
+  Enabled: true
+
+Naming/FileName:
+  Enabled: true
+
+Naming/MethodName:
+  Enabled: true
+
+Naming/VariableName:
+  Enabled: true
+
+RSpec/EmptyLineAfterSubject:
+  Exclude:
+    - '**/spec/factories/*.rb'
+
+RSpec/RepeatedExampleGroupDescription:
+  Enabled: false
+
+Rails:
+  Enabled: true
+
+Rails/FilePath:
+  Enabled: false
+
+Rails/RedundantPresenceValidationOnBelongsTo:
+  Enabled: false
+
+Rails/I18nLocaleTexts:
+  Enabled: false
+
+Rails/DynamicFindBy:
+  Whitelist:
+    - find_by_sql
+    - find_by_phone
+    - find_by_external_id
+
+Rails/SaveBang:
+  AllowedReceivers:
+    - Stripe::Charge
+    - FacebookAds::CustomAudience.get.users
+    - FacebookAds::AdAccount.get.customaudiences

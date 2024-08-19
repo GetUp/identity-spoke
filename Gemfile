@@ -18,7 +18,12 @@ group :development, :test do
   gem 'database_cleaner-active_record'
   gem 'database_cleaner-redis'
   gem 'factory_bot_rails'
-  gem 'rubocop', require: false
+  gem 'rubocop'
+  gem 'rubocop-factory_bot'
+  gem 'rubocop-performance'
+  gem 'rubocop-rails'
+  gem 'rubocop-rspec'
+  gem 'rubocop-rspec_rails'
   gem 'pry'
   gem 'pry-rails'
   gem 'pry-byebug'
