@@ -29,6 +29,10 @@ jobs:
           name: Database Setup
           command: bundle exec rake db:setup
       - run:
+          name: Run Rubocop
+          command: |
+            bundle exec rubocop
+      - run:
           name: Run tests
           command: |
             bundle exec rspec
