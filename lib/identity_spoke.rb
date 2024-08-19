@@ -1,11 +1,11 @@
 require "identity_spoke/engine"
 
 module IdentitySpoke
-  SYSTEM_NAME = 'spoke'
-  SYNCING = 'campaign'
-  CONTACT_TYPE = 'sms'
-  PULL_JOBS = [[:fetch_active_campaigns, 10.minutes]]
-  MEMBER_RECORD_DATA_TYPE = 'object'
+  SYSTEM_NAME = 'spoke'.freeze
+  SYNCING = 'campaign'.freeze
+  CONTACT_TYPE = 'sms'.freeze
+  PULL_JOBS = [[:fetch_active_campaigns, 10.minutes]].freeze
+  MEMBER_RECORD_DATA_TYPE = 'object'.freeze
   MUTEX_EXPIRY_DURATION = 10.minutes
 
   def self.push(_sync_id, member_ids, external_system_params)

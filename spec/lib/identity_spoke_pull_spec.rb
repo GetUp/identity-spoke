@@ -26,7 +26,7 @@ describe IdentitySpoke do
         receive_message_chain(:spoke, :pull_batch_amount).and_return(nil)
       )
 
-      @time = Time.now - 120.seconds
+      @time = 120.seconds.ago
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, title: 'Test', organization: @spoke_organization)
       @spoke_user = FactoryBot.create(:spoke_user)
@@ -219,7 +219,7 @@ describe IdentitySpoke do
         campaign: @spoke_campaign,
         assignment: spoke_assignment
       )
-      message = FactoryBot.create(
+      FactoryBot.create(
         :spoke_message_delivered,
         id: '123',
         created_at: @time,
@@ -248,7 +248,7 @@ describe IdentitySpoke do
         campaign: @spoke_campaign,
         assignment: spoke_assignment
       )
-      message = FactoryBot.create(
+      FactoryBot.create(
         :spoke_message_delivered,
         id: IdentitySpoke::Message.maximum(:id).to_i + 1,
         created_at: @time,
@@ -357,12 +357,25 @@ describe IdentitySpoke do
         contact_campaign: contact_campaign
       )
       ## Create the contact responses
-      3.times do |n|
-        n += 1
-        FactoryBot.create(:contact_response, contact_response_key: contact_response_key1, value: 'yes', contact: eval("contact#{n}"))
-        FactoryBot.create(:contact_response, contact_response_key: contact_response_key2, value: 'no', contact: eval("contact#{n}"))
-        FactoryBot.create(:contact_response, contact_response_key: contact_response_key2, value: 'maybe', contact: eval("contact#{n}"))
-      end
+      [contact1, contact2, contact3].each { |contact|
+        FactoryBot.create(
+          :contact_response,
+          contact_response_key: contact_response_key1,
+          value: 'yes', contact: contact
+        )
+        FactoryBot.create(
+          :contact_response,
+          contact_response_key: contact_response_key2,
+          value: 'no',
+          contact: contact
+        )
+        FactoryBot.create(
+          :contact_response,
+          contact_response_key: contact_response_key2,
+          value: 'maybe',
+          contact: contact
+        )
+      }
 
       spoke_assignment = IdentitySpoke::Assignment.first
       campaign_contact = IdentitySpoke::CampaignContact.first
@@ -396,7 +409,7 @@ describe IdentitySpoke do
         campaign: @spoke_campaign,
         assignment: spoke_assignment
       )
-      message = FactoryBot.create(
+      FactoryBot.create(
         :spoke_message_delivered,
         id: IdentitySpoke::Message.maximum(:id).to_i + 1,
         created_at: @time,
@@ -427,7 +440,7 @@ describe IdentitySpoke do
         receive_message_chain(:spoke, :pull_batch_amount).and_return(nil)
       )
 
-      @time = Time.now - 120.seconds
+      @time = 120.seconds.ago
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, title: 'Test', organization: @spoke_organization)
       @spoke_user = FactoryBot.create(:spoke_user)
@@ -450,13 +463,13 @@ describe IdentitySpoke do
         campaign: @spoke_campaign,
         assignment: spoke_assignment
       )
-      spoke_opt_out = FactoryBot.create(
+      FactoryBot.create(
         :spoke_opt_out,
         cell: campaign_contact.cell,
         organization: @spoke_organization,
         assignment: spoke_assignment
       )
-      message = FactoryBot.create(
+      FactoryBot.create(
         :spoke_message_delivered,
         id: IdentitySpoke::Message.maximum(:id).to_i + 1,
         created_at: @time,
