@@ -4,7 +4,7 @@ module IdentitySpoke
     self.table_name = "campaign_contact"
     belongs_to :campaign
     belongs_to :assignment, optional: true
-    has_many :question_responses
+    has_many :question_responses, dependent: nil
 
     def self.add_members(campaign_id, batch)
       OptOut.transaction do

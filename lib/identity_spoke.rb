@@ -9,31 +9,23 @@ module IdentitySpoke
   MUTEX_EXPIRY_DURATION = 10.minutes
 
   def self.push(_sync_id, member_ids, external_system_params)
-    begin
-      external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
-      external_campaign_name = Campaign.find(external_campaign_id).title
-      members = Member.where(id: member_ids).with_mobile
-      yield members, external_campaign_name
-    rescue => e
-      raise e
-    end
+    external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
+    external_campaign_name = Campaign.find(external_campaign_id).title
+    members = Member.where(id: member_ids).with_mobile
+    yield members, external_campaign_name
   end
 
   def self.push_in_batches(_sync_id, members, external_system_params)
-    begin
-      external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
-      members.in_batches(of: Settings.spoke.push_batch_amount).each_with_index do |batch_members, batch_index|
-        rows = ActiveModel::Serializer::CollectionSerializer.new(
-          batch_members,
-          serializer: SpokeMemberSyncPushSerializer,
-          campaign_id: external_campaign_id
-        ).as_json
-        write_result_count = CampaignContact.add_members(external_campaign_id, rows)
+    external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
+    members.in_batches(of: Settings.spoke.push_batch_amount).each_with_index do |batch_members, batch_index|
+      rows = ActiveModel::Serializer::CollectionSerializer.new(
+        batch_members,
+        serializer: SpokeMemberSyncPushSerializer,
+        campaign_id: external_campaign_id
+      ).as_json
+      write_result_count = CampaignContact.add_members(external_campaign_id, rows)
 
-        yield batch_index, write_result_count
-      end
-    rescue => e
-      raise e
+      yield batch_index, write_result_count
     end
   end
 
@@ -55,13 +47,9 @@ module IdentitySpoke
   end
 
   def self.pull(sync_id, external_system_params)
-    begin
-      pull_job = JSON.parse(external_system_params)['pull_job'].to_s
-      self.send(pull_job, sync_id) do |records_for_import_count, records_for_import, records_for_import_scope, pull_deferred|
-        yield records_for_import_count, records_for_import, records_for_import_scope, pull_deferred
-      end
-    rescue => e
-      raise e
+    pull_job = JSON.parse(external_system_params)['pull_job'].to_s
+    self.send(pull_job, sync_id) do |records_for_import_count, records_for_import, records_for_import_scope, pull_deferred|
+      yield records_for_import_count, records_for_import, records_for_import_scope, pull_deferred
     end
   end
 

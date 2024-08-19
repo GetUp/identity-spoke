@@ -98,12 +98,16 @@ describe IdentitySpoke do
     end
 
     it 'should create new members if none exist' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Member.count).to eq(4)
     end
 
     it 'should create new members for campaign contacts' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       member = Member.find_by_phone('61427700401')
       expect(member).to have_attributes(first_name: 'Bob1')
       expect(member.contacts_received.count).to eq(1)
@@ -111,7 +115,9 @@ describe IdentitySpoke do
     end
 
     it 'should create new members for user if none exist' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       member = Member.find_by_phone('61411222333')
       expect(member).to have_attributes(first_name: 'Super', last_name: 'Vollie')
       expect(member.contacts_received.count).to eq(3)
@@ -139,24 +145,32 @@ describe IdentitySpoke do
         entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
       )
 
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Member.count).to eq(4)
     end
 
     it 'should create a contact campaign' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(ContactCampaign.count).to eq(1)
       expect(ContactCampaign.first.contacts.count).to eq(6)
       expect(ContactCampaign.first).to have_attributes(name: @spoke_campaign.title, external_id: @spoke_campaign.id, system: 'spoke', contact_type: 'sms')
     end
 
     it 'should fetch the new outbound contacts and insert them' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.where(notes: 'outbound').count).to eq(3)
     end
 
     it 'should fetch the new inbound contacts and insert them' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.where(notes: 'outbound').count).to eq(3)
     end
 
@@ -182,16 +196,24 @@ describe IdentitySpoke do
     context('with force=true passed as parameter') do
       ContactResponse.destroy_all
       Contact.destroy_all
-      before { IdentitySpoke::Message.update_all(created_at: '1960-01-01 00:00:00') }
+      before {
+        IdentitySpoke::Message.all { |message|
+          message.update!(created_at: '1960-01-01 00:00:00')
+        }
+      }
 
       it 'should ignore the last_created_at and fetch the new contacts and insert them' do
-        IdentitySpoke.fetch_new_messages(@sync_id, force: true) {}
+        IdentitySpoke.fetch_new_messages(@sync_id, force: true) {
+          # noop
+        }
         expect(Contact.count).to eq(6)
       end
     end
 
     it 'should record contactee and contactor details on contact' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       contact = Contact.find_by_external_id('1')
       contactee = Member.find_by_phone(IdentitySpoke::Message.first.contact_number.sub(/^[+]*/, ''))
       contactor = Member.find_by_phone(@spoke_user.cell.sub(/^[+]*/, ''))
@@ -201,7 +223,9 @@ describe IdentitySpoke do
     end
 
     it 'should record specific details on contact' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.find_by_external_id('1')).to have_attributes(system: 'spoke', contact_type: 'sms', status: 'DELIVERED')
       expect(Contact.find_by_external_id('1').happened_at.utc.to_s).to eq(@time.utc.to_s)
     end
@@ -230,7 +254,9 @@ describe IdentitySpoke do
         user: @spoke_user,
         user_number: @spoke_user.cell
       )
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.where(external_id: '123').first).to have_attributes(status: 'DELIVERED')
       expect(Contact.where(external_id: '123').first.happened_at.utc.to_s).to eq(@time.utc.to_s)
       expect(Contact.where(external_id: '123').first.contactee.phone).to eq('61727700400')
@@ -259,7 +285,9 @@ describe IdentitySpoke do
         user: @spoke_user,
         user_number: @spoke_user.cell,
       )
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.last.contactee.phone).to eq('61427700409')
     end
 
@@ -267,22 +295,30 @@ describe IdentitySpoke do
       member = FactoryBot.create(:member, first_name: 'Janis')
       member.update_phone_number('61427700401')
       FactoryBot.create(:contact, contactee: member, external_id: '2')
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.count).to eq(6)
       expect(member.contacts_received.count).to eq(1)
     end
 
     it 'should be idempotent' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       contact_hash = Contact.select('contactee_id, contactor_id, duration, system, contact_campaign_id').as_json
       cr_count = ContactResponse.count
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(Contact.select('contactee_id, contactor_id, duration, system, contact_campaign_id').as_json).to eq(contact_hash)
       expect(ContactResponse.count).to eq(cr_count)
     end
 
     it 'should correctly save Survey Results' do
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       contact_response = ContactCampaign.last.contact_response_keys.find_by(key: 'voting_intention').contact_responses.first
       expect(contact_response.value).to eq('yes')
       contact_response = ContactCampaign.last.contact_response_keys.find_by(key: 'favorite_party').contact_responses.first
@@ -390,7 +426,9 @@ describe IdentitySpoke do
         user_number: @spoke_user.cell,
       )
 
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       expect(ContactResponse.count).to eq(9)
     end
 
@@ -420,7 +458,9 @@ describe IdentitySpoke do
         user: @spoke_user,
         user_number: @spoke_user.cell
       )
-      IdentitySpoke.fetch_new_messages(@sync_id) {}
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
       new_created_at = Sidekiq.redis { |r| r.get 'spoke:messages:last_created_at' }
       expect(new_created_at).not_to eq(old_created_at)
     end
@@ -480,7 +520,9 @@ describe IdentitySpoke do
         user: @spoke_user,
         user_number: @spoke_user.cell
       )
-      IdentitySpoke.fetch_new_opt_outs(@sync_id) {}
+      IdentitySpoke.fetch_new_opt_outs(@sync_id) {
+        # noop
+      }
       member.reload
       expect(member.is_subscribed_to?(@subscription)).to eq(false)
     end
@@ -502,7 +544,9 @@ describe IdentitySpoke do
     end
 
     it 'should create contact_campaigns' do
-      IdentitySpoke.fetch_active_campaigns(@sync_id) {}
+      IdentitySpoke.fetch_active_campaigns(@sync_id) {
+        # noop
+      }
       expect(ContactCampaign.count).to eq(2)
       ContactCampaign.find_each do |campaign|
         expect(campaign).to have_attributes(
@@ -514,7 +558,9 @@ describe IdentitySpoke do
     end
 
     it 'should create contact_response_keys' do
-      IdentitySpoke.fetch_active_campaigns(@sync_id) {}
+      IdentitySpoke.fetch_active_campaigns(@sync_id) {
+        # noop
+      }
       expect(ContactResponseKey.count).to eq(4)
       expect(ContactResponseKey.where(key: 'attend').count).to eq(2)
       expect(ContactResponseKey.where(key: 'volunteer').count).to eq(2)
