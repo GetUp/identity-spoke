@@ -83,7 +83,7 @@ module IdentitySpoke
 
   def self.fetch_new_messages_impl(sync_id, force)
     started_at = DateTime.now
-    last_created_at = get_redis_date('spoke:messages:last_created_at', Time.parse('2019-01-01 00:00:00'))
+    last_created_at = get_redis_date('spoke:messages:last_created_at')
     last_id = (Sidekiq.redis { |r| r.get 'spoke:messages:last_id' } || 0).to_i
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at, last_id)
     updated_messages_all = Message.updated_messages_all(force ? DateTime.new() : last_created_at, last_id)
@@ -232,8 +232,6 @@ module IdentitySpoke
     false # We never need another batch because we always process every campaign
   end
 
-  private
-
   def self.handle_campaign(spoke_campaign, update_campaign)
     contact_campaign = ContactCampaign.find_or_initialize_by(
       external_id: spoke_campaign.id,
@@ -362,9 +360,9 @@ module IdentitySpoke
     delete_redis_date(mutex_name)
   end
 
-  def self.get_redis_date(redis_identifier, default_value = Time.at(0))
+  def self.get_redis_date(redis_identifier, default_value = Time.at(0).utc)
     date_str = Sidekiq.redis { |r| r.get redis_identifier }
-    date_str ? Time.parse(date_str) : default_value
+    date_str ? Time.zone.parse(date_str) : default_value
   end
 
   def self.set_redis_date(redis_identifier, date_time_value, as_mutex = false)

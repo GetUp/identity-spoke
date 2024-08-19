@@ -165,7 +165,7 @@ describe IdentitySpoke do
         @message = FactoryBot.create(
           :spoke_message_delivered,
           id: 10000,
-          created_at: Time.now,
+          created_at: Time.current.utc,
           assignment: nil,
           campaign_contact_id: nil,
           user_id: nil,

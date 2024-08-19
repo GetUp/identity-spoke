@@ -48,8 +48,7 @@ module IdentitySpoke
     def location
       address = @object.try(:address)
       postcode = address.try(:postcode)
-      postcode.present? ? postcode : address.try(:town)
+      (postcode.presence || address.try(:town))
     end
-
   end
 end
