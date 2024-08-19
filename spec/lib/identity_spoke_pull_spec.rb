@@ -119,7 +119,7 @@ describe IdentitySpoke do
     end
 
     it 'should match existing members for campaign contacts and user' do
-      IdentitySpoke::CampaignContact.all.each do |campaign_contact|
+      IdentitySpoke::CampaignContact.find_each do |campaign_contact|
         UpsertMember.call(
           {
             firstname: campaign_contact.first_name,
@@ -180,8 +180,8 @@ describe IdentitySpoke do
     end
 
     context('with force=true passed as parameter') do
-      ContactResponse.all.destroy_all
-      Contact.all.destroy_all
+      ContactResponse.destroy_all
+      Contact.destroy_all
       before { IdentitySpoke::Message.update_all(created_at: '1960-01-01 00:00:00') }
 
       it 'should ignore the last_created_at and fetch the new contacts and insert them' do
@@ -274,11 +274,11 @@ describe IdentitySpoke do
 
     it 'should be idempotent' do
       IdentitySpoke.fetch_new_messages(@sync_id) {}
-      contact_hash = Contact.all.select('contactee_id, contactor_id, duration, system, contact_campaign_id').as_json
-      cr_count = ContactResponse.all.count
+      contact_hash = Contact.select('contactee_id, contactor_id, duration, system, contact_campaign_id').as_json
+      cr_count = ContactResponse.count
       IdentitySpoke.fetch_new_messages(@sync_id) {}
-      expect(Contact.all.select('contactee_id, contactor_id, duration, system, contact_campaign_id').as_json).to eq(contact_hash)
-      expect(ContactResponse.all.count).to eq(cr_count)
+      expect(Contact.select('contactee_id, contactor_id, duration, system, contact_campaign_id').as_json).to eq(contact_hash)
+      expect(ContactResponse.count).to eq(cr_count)
     end
 
     it 'should correctly save Survey Results' do
@@ -504,7 +504,7 @@ describe IdentitySpoke do
     it 'should create contact_campaigns' do
       IdentitySpoke.fetch_active_campaigns(@sync_id) {}
       expect(ContactCampaign.count).to eq(2)
-      ContactCampaign.all.each do |campaign|
+      ContactCampaign.find_each do |campaign|
         expect(campaign).to have_attributes(
           name: 'Test',
           system: IdentitySpoke::SYSTEM_NAME,

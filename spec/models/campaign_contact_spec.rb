@@ -16,7 +16,7 @@ describe IdentitySpoke::CampaignContact do
     it 'has inserted the correct campaign contacts to Spoke' do
       IdentitySpoke::CampaignContact.add_members(@spoke_campaign.id, @rows)
       expect(@spoke_campaign.campaign_contacts.count).to eq(2)
-      expect(@spoke_campaign.campaign_contacts.find_by_cell("+#{@member.phone_numbers.mobile.first.phone}").first_name).to eq(@member.first_name) # Spoke allows external IDs to be text
+      expect(@spoke_campaign.campaign_contacts.find_by(cell: "+#{@member.phone_numbers.mobile.first.phone}").first_name).to eq(@member.first_name) # Spoke allows external IDs to be text
     end
 
     it "doesn't insert duplicates already existing into Spoke" do
