@@ -23,6 +23,8 @@ class PhoneNumber < ApplicationRecord
   validate :standard_phone
   validates :phone, presence: true, allow_blank: false
 
+  after_commit { |pn| DedupeBlockerWorker.perform_async(pn.member.id) if Settings.deduper.enabled }
+
   MOBILE_TYPE = 'mobile'
   LANDLINE_TYPE = 'landline'
 

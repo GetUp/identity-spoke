@@ -30,6 +30,13 @@ class Settings
     }
   end
 
+
+  def self.deduper
+    return {
+      "enabled" => false
+    }
+  end
+
   def self.options
     return {
       "default_member_opt_in_subscriptions" => false,
