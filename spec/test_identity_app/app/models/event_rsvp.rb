@@ -11,6 +11,7 @@
 #
 
 class EventRsvp < ApplicationRecord
+  include AuditPlease
   belongs_to :event
   belongs_to :member
 
@@ -116,9 +117,9 @@ class EventRsvp < ApplicationRecord
       if (event = Event.find_by(controlshift_event_id: row['event_id']))
         if (member = UpsertMember.call({ emails: [{ email: row['email'] }] }, firstname: row['first_name'], lastname: row['last_name'], entry_point: "event_rsvp_#{event.id}"))
           event_rsvp = EventRsvp.find_or_initialize_by({
-                                                         event_id: event.id,
-                                                         member_id: member.id
-                                                       })
+            event_id: event.id,
+            member_id: member.id
+          })
           event_rsvp.created_at ||= row['created_at']
           event_rsvp.deleted_at = (row['attending_status'] == 'not_attending' ? row['created_at'] : nil)
           event_rsvp.save!

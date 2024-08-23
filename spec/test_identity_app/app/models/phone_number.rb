@@ -13,6 +13,8 @@
 #
 
 class PhoneNumber < ApplicationRecord
+  include AuditPlease
+
   before_save :find_phone_type
 
   belongs_to :member

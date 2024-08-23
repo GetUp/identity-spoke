@@ -1,4 +1,6 @@
 class CustomField < ApplicationRecord
+  include AuditPlease
+
   belongs_to :member
   belongs_to :custom_field_key
 

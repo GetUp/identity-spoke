@@ -14,6 +14,8 @@
 #
 
 class Address < ApplicationRecord
+  include AuditPlease
+
   belongs_to :member
   belongs_to :canonical_address, optional: true
 

@@ -14,6 +14,7 @@
 #
 
 class MemberSubscription < ApplicationRecord
+  include AuditPlease
   attr_accessor :subscribable
   attr_accessor :operation_reason
 

@@ -34,5 +34,6 @@ group :development, :test do
   gem 'sidekiq-batch'
   gem 'sidekiq-limit_fetch'
   gem 'sidekiq-unique-jobs'
+  gem 'audited', '~> 5.4.2'
   gem 'zip'
 end

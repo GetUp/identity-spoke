@@ -28,6 +28,7 @@
 require 'zip'
 
 class Member < ApplicationRecord
+  include AuditPlease
   # relationships
   belongs_to :role, optional: true
   has_many :list_members
