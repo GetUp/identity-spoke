@@ -30,6 +30,35 @@ class Settings
     }
   end
 
+  def self.redis_url
+    return ENV['REDIS_URL']
+  end
+
+  def self.redis
+    return {
+      "pool_size" => 5,
+    }
+  end
+
+  def self.sidekiq_redis_url
+    return ENV['REDIS_URL']
+  end
+
+  def self.sidekiq_redis_pool_size
+    return 5
+  end
+
+  def self.sidekiq
+    return {
+      "log_level" => "WARN",
+      "unique_jobs_debug" => false,
+      "unique_jobs_reaper_type" => 'none',
+      "unique_jobs_reaper_count" => 100,
+      "unique_jobs_reaper_interval" => 30,
+      "unique_jobs_reaper_timeout" => 2,
+      "unique_jobs_reaper_resurrector_interval" => 1800
+    }
+  end
 
   def self.deduper
     return {
