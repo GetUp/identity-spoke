@@ -1,0 +1,43 @@
+version: 2.1
+
+orbs:
+  ruby: circleci/ruby@2.1.1
+
+jobs:
+  run_tests:
+    docker:
+      - image: cimg/ruby:3.1
+        environment:
+          - RAILS_ENV: test
+          - RAILS_MAX_THREADS: 5
+          - RACK_ENV: test
+          - TZ: Australia/Sydney
+          - DATABASE_URL: postgres://identity:@localhost/identity_test
+          - SPOKE_DATABASE_URL: postgres://identity:@localhost/identity_spoke_test_engine
+          - SPOKE_READ_ONLY_DATABASE_URL: postgres://identity:@localhost/identity_spoke_test_engine
+          - REDIS_URL: redis://localhost:6379
+      - image: cimg/postgres:14.13
+        environment:
+          - POSTGRES_USER: identity
+          - POSTGRES_HOST_AUTH_METHOD: trust
+      - image: redis:6
+
+    steps:
+      - checkout
+      - ruby/install-deps
+      - run:
+          name: Database Setup
+          command: bundle exec rake db:setup
+      - run:
+          name: Run Rubocop
+          command: |
+            bundle exec rubocop
+      - run:
+          name: Run tests
+          command: |
+            bundle exec rspec
+
+workflows:
+  run_ci:
+    jobs:
+      - run_tests

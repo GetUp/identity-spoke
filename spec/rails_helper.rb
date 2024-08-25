@@ -7,13 +7,6 @@ ENV['RAILS_ENV'] ||= 'test'
 require 'dotenv'
 Dotenv.load('spec/test_identity_app/.env.test')
 
-# This needs to be done once ENV['DATABASE_URL'] is set, and before
-#  environment.rb is required, since that triggers Settings.load! which copies
-# external database urls from ENV into Settings.
-# TODO: Make this less brittle
-require 'support/external_database'
-ExternalDatabaseHelpers.set_external_database_urls(ENV['DATABASE_URL'])
-
 # Load rails
 require File.expand_path('../test_identity_app/config/environment', __FILE__)
 require 'rspec/rails'
@@ -46,21 +39,53 @@ Sidekiq::Testing.fake!
 # If you are not using ActiveRecord, you can remove this line.
 ActiveRecord::Migration.maintain_test_schema!
 
-# Ensure external databases are exist and are setup
-ExternalDatabaseHelpers.setup
-
 # Turn off Redshift because this creates problems with transactions
 RedshiftDB = ActiveRecord::Base
+
+require 'database_cleaner/active_record'
 
 RSpec.configure do |config|
   config.fixture_path = "#{Rails.root}/spec/fixtures"
 
   config.before(:suite) do
-    # Speed up tests by using :transaction
-    DatabaseCleaner[:active_record].strategy = :transaction
-    # And clean initially using :truncation
+    # Use 'truncation' for the strategy instead of 'transaction' for
+    # all cleaners below because although truncation is slower, the
+    # transaction strategy causes negative interactions between
+    # fixtures created and the test code.
+    #
+    # In particular, Identity Subscription::FOO_SUBSCRIPTION instances
+    # are lazily populated - deleting the rows for those in the DB can
+    # cause the id of the older versions to be inconsistent with those
+    # in the DB.
+    #
+    # Also, local IdentitySpoke classes that use the ReadWrite model
+    # and the ReadOnly model use different database connections, and
+    # this means that when creating fixtures the DatabaseCleaner's
+    # transactions hide objects created from the other.
+
+    DatabaseCleaner[:active_record].strategy = [
+      :truncation, except: ['subscriptions', 'settings']
+    ]
     DatabaseCleaner[:active_record].clean_with(:truncation)
-    # Enable redis cleaning too (:truncation is the only option)
+
+    DatabaseCleaner[
+      :active_record,
+      db: IdentitySpoke::ReadWrite
+    ].strategy = :truncation
+    DatabaseCleaner[
+      :active_record,
+      db: IdentitySpoke::ReadWrite
+    ].clean_with(:truncation)
+
+    DatabaseCleaner[
+      :active_record,
+      db: IdentitySpoke::ReadOnly
+    ].strategy = :truncation
+    DatabaseCleaner[
+      :active_record,
+      db: IdentitySpoke::ReadOnly
+    ].clean_with(:truncation)
+
     DatabaseCleaner[:redis].strategy = :deletion
   end
 
@@ -68,12 +93,12 @@ RSpec.configure do |config|
     DatabaseCleaner.cleaning do
       # Allow individual specs to do this when they need to via a method in
       # auth_helpers, which could also run `FactoryBot.create(:member_admin)`
-      #Role.create!(description: 'Admin')
+      # Role.create!(description: 'Admin')
       # Subscriptions that are assumed to exist for many tests
-      #[:email, :sms, :notification].each do |channel|
+      # [:email, :sms, :notification].each do |channel|
       #  FactoryBot.create(:"#{channel}_subscription")
-      #end
-      #ActiveRecord::Base.connection.execute("ALTER SEQUENCE subscriptions_id_seq RESTART WITH 4;")
+      # end
+      # ActiveRecord::Base.connection.execute("ALTER SEQUENCE subscriptions_id_seq RESTART WITH 4;")
       example.run
     end
   end
@@ -102,9 +127,4 @@ RSpec.configure do |config|
   config.filter_rails_from_backtrace!
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
-end
-
-# TODO: Move to external helpers
-def clean_external_database
-  ExternalDatabaseHelpers.clean
 end

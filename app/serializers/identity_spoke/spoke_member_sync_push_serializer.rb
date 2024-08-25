@@ -31,7 +31,7 @@ module IdentitySpoke
         suburb: @object.address.town,
         postcode: @object.address.postcode,
       } if @object.address
-      data["areas"] = @object.areas.each_with_index.map{|area, index|
+      data["areas"] = @object.areas.each_with_index.map { |area, _index|
         {
           name: area.name,
           code: area.code,
@@ -48,8 +48,7 @@ module IdentitySpoke
     def location
       address = @object.try(:address)
       postcode = address.try(:postcode)
-      postcode.present? ? postcode : address.try(:town)
+      (postcode.presence || address.try(:town))
     end
-
   end
 end

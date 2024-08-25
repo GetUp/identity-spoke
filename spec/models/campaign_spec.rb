@@ -1,7 +1,6 @@
 describe IdentitySpoke::Campaign do
   context '#active' do
     before(:each) do
-      clean_external_database
       spoke_organization = FactoryBot.create(:spoke_organization)
       2.times do
         FactoryBot.create(:spoke_campaign, is_started: true, is_archived: false, organization: spoke_organization)

@@ -1,39 +1,31 @@
 require "identity_spoke/engine"
 
 module IdentitySpoke
-  SYSTEM_NAME = 'spoke'
-  SYNCING = 'campaign'
-  CONTACT_TYPE = 'sms'
-  PULL_JOBS = [[:fetch_active_campaigns, 10.minutes]]
-  MEMBER_RECORD_DATA_TYPE='object'
+  SYSTEM_NAME = 'spoke'.freeze
+  SYNCING = 'campaign'.freeze
+  CONTACT_TYPE = 'sms'.freeze
+  PULL_JOBS = [[:fetch_active_campaigns, 10.minutes]].freeze
+  MEMBER_RECORD_DATA_TYPE = 'object'.freeze
   MUTEX_EXPIRY_DURATION = 10.minutes
 
-  def self.push(sync_id, member_ids, external_system_params)
-    begin
-      external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
-      external_campaign_name = Campaign.find(external_campaign_id).title
-      members = Member.where(id: member_ids).with_mobile
-      yield members, external_campaign_name
-    rescue => e
-      raise e
-    end
+  def self.push(_sync_id, member_ids, external_system_params)
+    external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
+    external_campaign_name = Campaign.find(external_campaign_id).title
+    members = Member.where(id: member_ids).with_mobile
+    yield members, external_campaign_name
   end
 
-  def self.push_in_batches(sync_id, members, external_system_params)
-    begin
-      external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
-      members.in_batches(of: Settings.spoke.push_batch_amount).each_with_index do |batch_members, batch_index|
-        rows = ActiveModel::Serializer::CollectionSerializer.new(
-          batch_members,
-          serializer: SpokeMemberSyncPushSerializer,
-          campaign_id: external_campaign_id
-        ).as_json
-        write_result_count = CampaignContact.add_members(external_campaign_id, rows)
+  def self.push_in_batches(_sync_id, members, external_system_params)
+    external_campaign_id = JSON.parse(external_system_params)['campaign_id'].to_i
+    members.in_batches(of: Settings.spoke.push_batch_amount).each_with_index do |batch_members, batch_index|
+      rows = ActiveModel::Serializer::CollectionSerializer.new(
+        batch_members,
+        serializer: SpokeMemberSyncPushSerializer,
+        campaign_id: external_campaign_id
+      ).as_json
+      write_result_count = CampaignContact.add_members(external_campaign_id, rows)
 
-        yield batch_index, write_result_count
-      end
-    rescue => e
-      raise e
+      yield batch_index, write_result_count
     end
   end
 
@@ -55,13 +47,9 @@ module IdentitySpoke
   end
 
   def self.pull(sync_id, external_system_params)
-    begin
-      pull_job = JSON.parse(external_system_params)['pull_job'].to_s
-      self.send(pull_job, sync_id) do |records_for_import_count, records_for_import, records_for_import_scope, pull_deferred|
-        yield records_for_import_count, records_for_import, records_for_import_scope, pull_deferred
-      end
-    rescue => e
-      raise e
+    pull_job = JSON.parse(external_system_params)['pull_job'].to_s
+    self.send(pull_job, sync_id) do |records_for_import_count, records_for_import, records_for_import_scope, pull_deferred|
+      yield records_for_import_count, records_for_import, records_for_import_scope, pull_deferred
     end
   end
 
@@ -83,7 +71,7 @@ module IdentitySpoke
 
   def self.fetch_new_messages_impl(sync_id, force)
     started_at = DateTime.now
-    last_created_at = get_redis_date('spoke:messages:last_created_at', Time.parse('2019-01-01 00:00:00'))
+    last_created_at = get_redis_date('spoke:messages:last_created_at')
     last_id = (Sidekiq.redis { |r| r.get 'spoke:messages:last_id' } || 0).to_i
     updated_messages = Message.updated_messages(force ? DateTime.new() : last_created_at, last_id)
     updated_messages_all = Message.updated_messages_all(force ? DateTime.new() : last_created_at, last_id)
@@ -143,20 +131,20 @@ module IdentitySpoke
     end
     started_at = DateTime.now
     last_created_at = get_redis_date('spoke:opt_outs:last_created_at')
-    last_id = (Sidekiq.redis { |r| r.get 'spoke:opt_outs:last_id'} || 0).to_i
+    last_id = (Sidekiq.redis { |r| r.get 'spoke:opt_outs:last_id' } || 0).to_i
     updated_opt_outs = IdentitySpoke::OptOut.updated_opt_outs(force ? DateTime.new() : last_created_at, last_id)
     updated_opt_outs_all = IdentitySpoke::OptOut.updated_opt_outs_all(force ? DateTime.new() : last_created_at, last_id)
 
     iteration_method = force ? :find_each : :each
 
     updated_opt_outs.send(iteration_method) do |opt_out|
-      Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_s(:inspect)}"
+      Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_fs(:inspect)}"
 
       campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
       if campaign_contact
         contactee = UpsertMember.call(
           {
-            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
+            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
             firstname: campaign_contact.first_name,
             lastname: campaign_contact.last_name,
             member_id: campaign_contact.external_id
@@ -229,10 +217,8 @@ module IdentitySpoke
       false
     )
 
-    false  # We never need another batch because we always process every campaign
+    false # We never need another batch because we always process every campaign
   end
-
-  private
 
   def self.handle_campaign(spoke_campaign, update_campaign)
     contact_campaign = ContactCampaign.find_or_initialize_by(
@@ -260,7 +246,7 @@ module IdentitySpoke
   end
 
   def self.handle_new_message(sync_id, message)
-    Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling message: #{message.id}/#{message.created_at.utc.to_s(:inspect)}"
+    Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling message: #{message.id}/#{message.created_at.utc.to_fs(:inspect)}"
 
     ## Find who is the campaign contact for the message
     campaign_contact_id = message.campaign_contact_id
@@ -273,7 +259,7 @@ module IdentitySpoke
     ## Create Member for campaign contact
     campaign_contact_member = UpsertMember.call(
       {
-        phones: [{ phone: campaign_contact.cell.sub(/^[+]*/,'') }],
+        phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
         firstname: campaign_contact.first_name,
         lastname: campaign_contact.last_name,
         member_id: campaign_contact.external_id
@@ -286,7 +272,7 @@ module IdentitySpoke
     if user
       user_member = UpsertMember.call(
         {
-          phones: [{ phone: user.cell.sub(/^[+]*/,'') }],
+          phones: [{ phone: user.cell.sub(/^[+]*/, '') }],
           firstname: user.first_name,
           lastname: user.last_name
         },
@@ -296,7 +282,7 @@ module IdentitySpoke
     else
       user_member = UpsertMember.call(
         {
-          phones: [{ phone: message.user_number.sub(/^[+]*/,'') }],
+          phones: [{ phone: message.user_number.sub(/^[+]*/, '') }],
         },
         entry_point: "#{SYSTEM_NAME}",
         ignore_name_change: false
@@ -326,6 +312,7 @@ module IdentitySpoke
 
     ## Loop over all of the campaign contacts question responses if message is not from contact
     return if message.is_from_contact
+
     campaign_contact.question_responses.each do |qr|
       ### Find or create the contact response key
       contact_response_key = ContactResponseKey.find_or_initialize_by(key: qr.interaction_step.question, contact_campaign: contact_campaign)
@@ -361,17 +348,17 @@ module IdentitySpoke
     delete_redis_date(mutex_name)
   end
 
-  def self.get_redis_date(redis_identifier, default_value=Time.at(0))
+  def self.get_redis_date(redis_identifier, default_value = Time.at(0).utc)
     date_str = Sidekiq.redis { |r| r.get redis_identifier }
-    date_str ? Time.parse(date_str) : default_value
+    date_str ? Time.zone.parse(date_str) : default_value
   end
 
-  def self.set_redis_date(redis_identifier, date_time_value, as_mutex=false)
-    date_str = date_time_value.utc.to_s(:inspect) # Ensures fractional seconds are retained
+  def self.set_redis_date(redis_identifier, date_time_value, as_mutex = false)
+    date_str = date_time_value.utc.to_fs(:inspect) # Ensures fractional seconds are retained
     if as_mutex
-      Sidekiq.redis { |r| r.setnx redis_identifier, date_str }
+      Sidekiq.redis { |r| r.set(redis_identifier, date_str, :nx => true) }
     else
-      Sidekiq.redis { |r| r.set redis_identifier, date_str }
+      Sidekiq.redis { |r| r.set(redis_identifier, date_str) }
     end
   end
 
@@ -395,6 +382,7 @@ module IdentitySpoke
       worker_sync_id = (args.count > 0) ? args[0] : nil
       worker_sync = worker_sync_id ? Sync.find_by(id: worker_sync_id) : nil
       next unless worker_sync
+
       worker_system = worker_sync.external_system
       worker_method_name = JSON.parse(worker_sync.external_system_params)["pull_job"]
       already_running = (worker_system == SYSTEM_NAME &&
@@ -404,5 +392,4 @@ module IdentitySpoke
     end
     return false
   end
-
 end

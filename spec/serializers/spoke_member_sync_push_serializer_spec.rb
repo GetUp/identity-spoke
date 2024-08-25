@@ -1,12 +1,11 @@
 describe IdentitySpoke::SpokeMemberSyncPushSerializer do
   context 'serialize' do
     before(:each) do
-      clean_external_database
-      Settings.stub_chain(:spoke) { {} }
+      allow(Settings).to(receive_message_chain(:spoke).and_return({}))
       @sync_id = 1
       @spoke_organization = FactoryBot.create(:spoke_organization)
       @spoke_campaign = FactoryBot.create(:spoke_campaign, organization: @spoke_organization)
-      @external_system_params = JSON.generate({'campaign_id' => @spoke_campaign.id})
+      @external_system_params = JSON.generate({ 'campaign_id' => @spoke_campaign.id })
       @member = FactoryBot.create(:member_with_mobile_and_custom_fields)
       FactoryBot.create(:member_with_mobile)
       FactoryBot.create(:member)

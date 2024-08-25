@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Sync < ApplicationRecord
+  include Orderable
+  include Searchable
 
   INITIALISING_STATUS = 'initialising'
   INITIALISED_STATUS = 'initialised'
@@ -50,8 +52,8 @@ class Sync < ApplicationRecord
     when 'typeform'
       require 'identity_typeform' unless defined? IdentityTypeform
       'IdentityTypeform'.constantize
-    when 'survey_gizmo'
-      ExternalSystems::IdentitySurveyGizmo
+    when 'alchemer'
+      ExternalSystems::IdentityAlchmer
     end
   end
 
@@ -137,8 +139,8 @@ class Sync < ApplicationRecord
       Settings.nation_builder
     when 'typeform'
       Settings.typeform
-    when 'survey_gizmo'
-      Settings.survey_gizmo
+    when 'alchemer'
+      Settings.alchemer
     end
   end
 
@@ -226,7 +228,7 @@ class Sync < ApplicationRecord
         set_status(FINALISED_STATUS, true, message, 100)
       end
 
-      if service.respond_to?('pull')
+      if service.respond_to?(:pull)
         service.pull(id, external_system_params, &set_finished)
       else # Some services don't need a special/custom pull method
         pull_job = JSON.parse(external_system_params)['pull_job'].to_s

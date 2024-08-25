@@ -6,6 +6,8 @@ module IdentitySpoke
       service { Faker::Book.title }
       service_id { Faker::Number.number(digits: 10) }
       send_status { 'NOT_ATTEMPTED' }
+      user { association :user }
+      campaign_contact { association :campaign_contact }
 
       factory :spoke_message_delivered do
         send_status { 'DELIVERED' }
