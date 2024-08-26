@@ -825,14 +825,31 @@ class Member < ApplicationRecord
     # load_from_csv is for loading members from external services such as ControlShift
     # ControlShift has a nightly full data load, including old data, so can't just upsert everything
     def load_from_csv(row)
+      cs_id = row['id']
+      if cs_id.blank?
+        raise 'ControlShift id missing'
+      end
+
       payload = {
         emails: [{ email: row['email'] }],
         firstname: row['first_name'],
         lastname: row['last_name'],
-        external_ids: { controlshift: row['id'] },
+        external_ids: { controlshift: cs_id },
         updated_at: row['updated_at']
       }
-      UpsertMember.call(payload)
+
+      retries = 0
+      begin
+        UpsertMember.call(payload)
+      rescue StandardError => e
+        # Possibility of race conditions in the transaction.
+        # Most likely from different CSL imports trying to upsert the same member.
+        # Transaction will clean up after itself, and then retry again.
+        # Have a limit of 3 retries so that we don't retry forever.
+        retries += 1
+        retry if retries < 3
+        Rails.logger.error("Failed to upsert member from ControlShift: #{e}")
+      end
     end
 
     def select_data(rows, key_name)
@@ -869,11 +886,15 @@ class Member < ApplicationRecord
         # find/create the member
         cons_hash = payload[:cons_hash].merge(updated_at: payload[:create_dt])
         ignore_names = Settings.options.ignore_name_change_for_donation && ['donate', 'regular_donate'].include?(payload[:action_type])
-        member = UpsertMember.call(
-          cons_hash,
-          entry_point: "action:#{payload[:action_name]}",
-          ignore_name_change: ignore_names
-        )
+        begin
+          member = UpsertMember.call(
+            cons_hash,
+            entry_point: "action:#{payload[:action_name]}",
+            ignore_name_change: ignore_names
+          )
+        rescue StandardError
+          member = nil
+        end
         if member.present?
           # find/create the action
           begin

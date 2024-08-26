@@ -1,3 +1,42 @@
+##
+# Standard service for updating or inserting a member.
+#
+# Given a `cons_hash` payload parameter (see API documentation for
+# details) looks up an existing member and update them with the values
+# in the payload, or if not found creates the member.
+#
+# Member lookup is performed using the following payload data:
+#  * First email address given (all others are ignored)
+#  * First phone number given (others will be upserted, phone numbers will
+#    be ignored if payload key `ignore_phone_number_match` evaluates to
+#    true)
+#  * First existing external systems id given
+#  * `member_id` - if given the member *must* already exist else an error is
+#    thrown
+#  * `guid` - if given the member *must* already exist else an error is
+#    thrown
+#
+# At least one of the above payload values must be provided, otherwise
+# an error is thrown.
+#
+# Any email given in the payload will be filtered first through
+# `Cleanser`, and any phone numbers given will be normalised via the
+# PhoneNumber.
+#
+# If `Settings.options.allow_subscribe_via_upsert_member` is true,
+# then the member's subscriptions will be updated using the payload
+# `subscriptions` parameter. If `new_member_opt_in` is also true, any
+# members created as part of the subscription process will also be
+# subscribed, but using the defaul subscriptions.
+#
+# Will raise an exception if either the `member_id` or `guid` payload
+# values are set an a matching member is not found, if not enough data
+# was provided to lookup or create a unique member record, or if any
+# matched member is already ghosted.
+#
+# Will not change an existing member's name unless
+# `ignore_name_change` is true.
+#
 class UpsertMember < IdentityBaseService
   def initialize(payload,
                  entry_point: '',
@@ -10,17 +49,18 @@ class UpsertMember < IdentityBaseService
     if @new_member_opt_in.nil?
       @new_member_opt_in = Settings.options.default_member_opt_in_subscriptions
     end
-    @retries = 0
   end
 
   def call
     ApplicationRecord.transaction do
-      # fail if there's no data
-      next if payload.blank?
-
-      member, member_created = find_or_create_member(payload)
-
-      next if member.blank?
+      begin
+        member, member_created = find_or_create_member(payload)
+      rescue StandardError => e
+        Rails.logger.warn {
+          "Rejected upsert due to member find/create error: #{e}"
+        }
+        raise
+      end
 
       upsert_external_ids(payload[:external_ids], member) if payload.key?(:external_ids)
 
@@ -49,14 +89,6 @@ class UpsertMember < IdentityBaseService
 
       member
     end
-  rescue StandardError
-    # Possibility of race conditions in the transaction.
-    # Most likely from different CSL imports trying to upsert the same member.
-    # Transaction will clean up after itself, and then retry again.
-    # Have a limit of 3 retries so that we don't retry forever.
-    @retries += 1
-    retry if @retries < 3
-    raise
   end
 
   private
@@ -64,36 +96,69 @@ class UpsertMember < IdentityBaseService
   attr_reader :payload, :entry_point, :ignore_name_change
 
   def find_or_create_member(payload)
+    member_id = payload[:member_id]
+    if member_id.present?
+      return [Member.find_sole_by(id: member_id), false]
+    end
+
+    guid = payload[:guid]
+    if guid.present?
+      return [Member.find_sole_by(guid: guid), false]
+    end
+
+    # For member lookup, it's good enough to ignore invalid email
+    # addresses and phone numbers, since if they are invalid, we can't
+    # perform a lookup for them
+
+    email = Cleanser.cleanse_email(payload.try(:[], :emails).try(:[], 0).try(:[], :email))
+    email = nil unless Cleanser.accept_email?(email)
+
+    phone = PhoneNumber.standardise_phone_number(
+      payload.try(:[], :phones).try(:[], 0).try(:[], :phone)
+    )
+
     external_matched_members = payload[:external_ids]&.map do |system, id|
       Member.find_by_external_id(system, id)
     end&.compact&.uniq
-
-    email = Cleanser.cleanse_email(payload.try(:[], :emails).try(:[], 0).try(:[], :email))
-    phone = PhoneNumber.standardise_phone_number(payload.try(:[], :phones).try(:[], 0).try(:[], :phone))
-    guid = payload[:guid]
-
-    email = nil unless Cleanser.accept_email?(email)
-
-    member_created = false
     member = external_matched_members.first if external_matched_members.present? && external_matched_members.length == 1
 
-    unless member || email || phone || guid
-      Rails.logger.info('Rejected upsert for member because there was no email or phone or guid found')
-      return nil, false
+    unless member || email || phone
+      raise "Not enough information provided to find or create a member"
     end
 
-    member = Member.find_by(email: email) if !member && email.present?
-    if !payload[:ignore_phone_number_match]
-      member = Member.find_by_phone(phone) if !member && phone.present?
-    end
-    member = Member.find_by(guid: guid) if !member && guid.present?
+    # Both the email and phone lookups below catch both "not found" &
+    # "too many" here since if not found then it should be created,
+    # but also if more than one is found, it's not possible to
+    # reliably disambiguate in an automated way, so create a duplicate
+    # and let something/someone else handle it.
 
-    unless member
+    if !member && email.present?
+      begin
+        member = Member.find_sole_by(email: email)
+      rescue ActiveRecord::RecordNotFound
+        # pass
+      rescue ActiveRecord::SoleRecordExceeded
+        # pass
+      end
+    end
+
+    if !member && phone.present? && !payload[:ignore_phone_number_match]
+      begin
+        member = PhoneNumber.find_sole_by(phone: phone).member
+      rescue ActiveRecord::RecordNotFound
+        # pass
+      rescue ActiveRecord::SoleRecordExceeded
+        # pass
+      end
+    end
+
+    member_created = false
+    if !member
       member = Member.create!(email: email, entry_point: entry_point)
       member_created = true
     end
 
-    [member, member_created]
+    return [member, member_created]
   end
 
   def upsert_external_ids(external_ids, member)
