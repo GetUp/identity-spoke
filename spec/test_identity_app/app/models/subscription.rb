@@ -27,7 +27,9 @@ class Subscription < ApplicationRecord
     sub.is_default = true
   end
 
-  UNSUBSCRIBE_EMAIL_URL = "#{Settings.app.inbound_url}/subscriptions/unsubscribe?subscription=#{Subscription::EMAIL_SUBSCRIPTION.id}".freeze
+  UNSUBSCRIBE_EMAIL_URL = !Settings.email["unsubscribe_url"] ?
+                          "#{Settings.app.inbound_url}/subscriptions/unsubscribe?subscription=#{Subscription::EMAIL_SUBSCRIPTION.id}&".freeze
+                          : "#{Settings.email.unsubscribe_url}?".freeze
 
   SMS_SUBSCRIPTION = Subscription.find_or_create_by! slug: Subscription::SMS_SLUG do |sub|
     sub.name = 'SMS'
@@ -60,6 +62,7 @@ class Subscription < ApplicationRecord
   has_many :subscribables, through: :member_subscription_events
   has_many :members, through: :member_subscriptions
 
+  default_scope { order(is_default: :desc, member_count: :desc) }
   scope :defaults, -> { where(is_default: true, deleted_at: nil) }
   scope :non_defaults, -> { where(is_default: false, deleted_at: nil) }
 

@@ -1,21 +1,27 @@
 class Cleanser
   ########## Email cleansing ##########
-  def self.cleanse_email(raw_email)
-    raw_email = raw_email.to_s
-    return nil if raw_email.empty?
-
-    # do basic cleansing
-    email = raw_email.downcase
-    email = email.gsub(/\s/, '')
-    email = email.gsub('%40', '@') # remove html entities
-
-    account = email.split('@').first
-    domain = self.fix_typos_in_domain(email.split('@').last)
-
-    email = "#{account}@#{domain}"
-    return nil unless accept_email?(email)
-
+  def self.normalise_email(raw_email)
+    email = raw_email.to_s
+    if email.present?
+      email = email.downcase
+      email = email.gsub(/\s/, '')
+      email = email.gsub('%40', '@') # remove html entities
+    else
+      email = nil
+    end
     email
+  end
+
+  def self.cleanse_email(raw_email)
+    email = Cleanser.normalise_email(raw_email)
+    if email.present?
+      account = email.split('@').first
+      domain = self.fix_typos_in_domain(email.split('@').last)
+      email = "#{account}@#{domain}"
+      accept_email?(email) ? email : nil
+    else
+      nil
+    end
   end
 
   def self.accept_email?(email_address)
