@@ -110,8 +110,8 @@ describe IdentitySpoke do
       }
       member = Member.find_by_phone('61427700401')
       expect(member).to have_attributes(first_name: 'Bob1')
-      expect(member.contacts_received.count).to eq(1)
-      expect(member.contacts_made.count).to eq(1)
+      expect(member.contacts_received.count).to eq(2)
+      expect(member.contacts_made.count).to eq(0)
     end
 
     it 'should create new members for user if none exist' do
@@ -120,8 +120,8 @@ describe IdentitySpoke do
       }
       member = Member.find_by_phone('61411222333')
       expect(member).to have_attributes(first_name: 'Super', last_name: 'Vollie')
-      expect(member.contacts_received.count).to eq(3)
-      expect(member.contacts_made.count).to eq(3)
+      expect(member.contacts_received.count).to eq(0)
+      expect(member.contacts_made.count).to eq(6)
     end
 
     it 'should match existing members for campaign contacts and user' do
@@ -299,7 +299,7 @@ describe IdentitySpoke do
         # noop
       }
       expect(Contact.count).to eq(6)
-      expect(member.contacts_received.count).to eq(1)
+      expect(member.contacts_received.count).to eq(2)
     end
 
     it 'should be idempotent' do
