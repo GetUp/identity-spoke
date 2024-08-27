@@ -257,7 +257,7 @@ module IdentitySpoke
     end
 
     ## Create Member for campaign contact
-    campaign_contact_member = UpsertMember.call(
+    contactee = UpsertMember.call(
       {
         phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
         firstname: campaign_contact.first_name,
@@ -268,9 +268,34 @@ module IdentitySpoke
       ignore_name_change: false
     )
 
+    # DO NOT EVER USE message.user_number to find/upsert a member in
+    # Id.
+    #
+    # For Twilio at least, this is a generated incoming number, and
+    # will possibly be different for each campaign contact. If
+    # message.user is nil, we simply don't know which Spoke backend
+    # account was involved. That should never be the case for outgoing
+    # messages - i.e. messages the user sends to a campaign contact,
+    # but seems to be always the case for incoming messages -
+    # i.e. replies from the campaign contact to a message.
+    #
+    # Since Contact.contactee cannot be nil (but Contact.contactor can
+    # be) it means that the Contact.contactee must always be the Spoke
+    # campaign contact, and the Contact.contactor must be the Spoke
+    # user given by message.user (if known), even for incoming
+    # messages. This sits a bit awkwardly, but if you think about
+    # contactor/contactee as being the people originating and
+    # receiving messages for the campaign as a whole (i.e. not from a
+    # per-message perspective) it makes a bit of sense.
+    #
+    # Note also that since conversations can be re-assigned, we can't
+    # just rely on "whoever sent the first message" to work out who
+    # will pick up and reply to any incoming messages, either. Best
+    # not make a guess that may well be in correct.
+
     user = message.user
     if user
-      user_member = UpsertMember.call(
+      contactor = UpsertMember.call(
         {
           phones: [{ phone: user.cell.sub(/^[+]*/, '') }],
           firstname: user.first_name,
@@ -279,19 +304,7 @@ module IdentitySpoke
         entry_point: "#{SYSTEM_NAME}",
         ignore_name_change: false
       )
-    else
-      user_member = UpsertMember.call(
-        {
-          phones: [{ phone: message.user_number.sub(/^[+]*/, '') }],
-        },
-        entry_point: "#{SYSTEM_NAME}",
-        ignore_name_change: false
-      )
     end
-
-    ## Assign the contactor and contactee according to if the message was from the campaign contact
-    contactor = message.is_from_contact ? campaign_contact_member : user_member
-    contactee = message.is_from_contact ? user_member : campaign_contact_member
 
     ## Find or create the contact campaign
     contact_campaign = handle_campaign(campaign_contact.campaign, false)
