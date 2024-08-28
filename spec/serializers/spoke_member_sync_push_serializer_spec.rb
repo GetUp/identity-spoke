@@ -18,7 +18,7 @@ describe IdentitySpoke::SpokeMemberSyncPushSerializer do
         serializer: IdentitySpoke::SpokeMemberSyncPushSerializer,
         campaign_id: @spoke_campaign.id
       ).as_json
-      expect(rows[0][:external_id]).to eq(@member.id)
+      expect(rows[0][:external_id]).to eq(@member.id.to_s)
       expect(rows[0][:cell]).to eq("+#{@member.phone_numbers.mobile.first.phone}")
       expect(rows[0][:campaign_id]).to eq(@spoke_campaign.id)
       expect(rows[0][:custom_fields]).to eq("{\"secret\":\"me_likes\"}")
