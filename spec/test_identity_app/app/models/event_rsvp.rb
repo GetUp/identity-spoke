@@ -84,8 +84,10 @@ class EventRsvp < ApplicationRecord
           custom_fields: payload[:rsvp][:custom_fields] ? payload[:rsvp][:custom_fields] : []
         }
 
-        unless (member = UpsertMember.call(member_hash, entry_point: "event_rsvp_#{event.id}"))
-          raise "RSVP failed to save because the member #{member_hash[:email]} doesn't exist and couldn't be created from the payload"
+        begin
+          member = UpsertMember.call(member_hash, entry_point: "event_rsvp_#{event.id}")
+        rescue StandardError => e
+          raise "RSVP failed to save because the member #{member_hash[:email]} doesn't exist and couldn't be created from the payload: #{e}"
         end
       end
 
@@ -114,22 +116,35 @@ class EventRsvp < ApplicationRecord
     end
 
     def load_from_csv(row)
-      if (event = Event.find_by(controlshift_event_id: row['event_id']))
-        if (member = UpsertMember.call({ emails: [{ email: row['email'] }] }, firstname: row['first_name'], lastname: row['last_name'], entry_point: "event_rsvp_#{event.id}"))
-          event_rsvp = EventRsvp.find_or_initialize_by({
-            event_id: event.id,
-            member_id: member.id
-          })
-          event_rsvp.created_at ||= row['created_at']
-          event_rsvp.deleted_at = (row['attending_status'] == 'not_attending' ? row['created_at'] : nil)
-          event_rsvp.save!
-        else
-          logger.info("Couldn't create event RSVP as the member was invalid - row ID #{row['id']}")
-        end
-      else
+      event = Event.find_by(controlshift_event_id: row['event_id'])
+      if event.nil?
         logger.info("Couldn't create event RSVP as we don't have the event yet - event ID #{row['event_id']}")
 
         raise Controlshift::SilentRetryError, "Couldn't create event RSVP as we don't have the event yet"
+      end
+
+      member = nil
+      begin
+        member = UpsertMember.call(
+          { emails: [{ email: row['email'] }] },
+          firstname: row['first_name'],
+          lastname: row['last_name'],
+          entry_point: "event_rsvp_#{event.id}"
+        )
+      rescue StandardError => e
+        logger.warn {
+          "Couldn't create event RSVP as the member was invalid - row ID #{row['id']} #{e}"
+        }
+      end
+
+      if member.present?
+        event_rsvp = EventRsvp.find_or_initialize_by({
+          event_id: event.id,
+          member_id: member.id
+        })
+        event_rsvp.created_at ||= row['created_at']
+        event_rsvp.deleted_at = (row['attending_status'] == 'not_attending' ? row['created_at'] : nil)
+        event_rsvp.save!
       end
     end
   end
