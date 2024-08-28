@@ -137,24 +137,43 @@ module IdentitySpoke
 
     iteration_method = force ? :find_each : :each
 
+    subscription = Subscription.find_sole_by(
+      id: Settings.spoke.subscription_id
+    )
+
     updated_opt_outs.send(iteration_method) do |opt_out|
       Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_fs(:inspect)}"
 
-      campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
-      if campaign_contact
-        contactee = UpsertMember.call(
-          {
-            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
-            firstname: campaign_contact.first_name,
-            lastname: campaign_contact.last_name,
-            member_id: campaign_contact.external_id
-          },
-          entry_point: "#{SYSTEM_NAME}",
-          ignore_name_change: false
+      # Spoke only updates CampaignContact.is_opted_out in a batch,
+      # and doesn't update the updated_at column when it does. So just
+      # look for the most recent campaign contact with matching phone
+      # number instead.
+      #
+      # If that contact has an external_id use that to look up the
+      # specific member, otherwise we need to opt out everyone with
+      # that phone number - even though our data is low quality such
+      # that that we may have multiple members with the opted out
+      # number, the actual person with that number doesn't want to
+      # hear from us so we can't leave any subscribed.
+
+      cell = opt_out.cell
+      campaign_contact = IdentitySpoke::CampaignContact.where(cell: cell).last!
+      if campaign_contact.external_id.present?
+        members = [Member.find_sole_by(id: campaign_contact.external_id.to_i)]
+      else
+        members = Member.select(:id).distinct.joins(:phone_numbers).where(
+          phone_numbers: {
+            phone: PhoneNumber.standardise_phone_number(cell)
+          }
         )
-        subscription = Subscription.find(Settings.spoke.subscription_id)
-        contactee.unsubscribe_from(subscription, reason: 'spoke:opt_out', event_time: DateTime.now) if contactee
+        if members.size == 0
+          members = [campaign_contact.upsert_member()]
+        end
       end
+
+      members.each { |member|
+        member.unsubscribe_from(subscription, reason: 'spoke:opt_out')
+      }
     end
 
     unless updated_opt_outs.empty?
@@ -256,55 +275,22 @@ module IdentitySpoke
       return
     end
 
-    ## Create Member for campaign contact
-    contactee = UpsertMember.call(
-      {
-        phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
-        firstname: campaign_contact.first_name,
-        lastname: campaign_contact.last_name,
-        member_id: campaign_contact.external_id
-      },
-      entry_point: "#{SYSTEM_NAME}",
-      ignore_name_change: false
-    )
+    # Upsert contacted member
+    contactee = campaign_contact.upsert_member
 
-    # DO NOT EVER USE message.user_number to find/upsert a member in
-    # Id.
+    # Upsert contacting member. If a message is outgoing,
+    # 'message.user' will be set, otherwise it will be null since
+    # anyone could reply to the message.
     #
-    # For Twilio at least, this is a generated incoming number, and
-    # will possibly be different for each campaign contact. If
-    # message.user is nil, we simply don't know which Spoke backend
-    # account was involved. That should never be the case for outgoing
-    # messages - i.e. messages the user sends to a campaign contact,
-    # but seems to be always the case for incoming messages -
-    # i.e. replies from the campaign contact to a message.
+    # However for incoming messages, since we don't know in advance
+    # who will rely to it, and since we only have a phone number for
+    # them (and hence can't reliably upsert them), don't try to
+    # upsert.
     #
-    # Since Contact.contactee cannot be nil (but Contact.contactor can
-    # be) it means that the Contact.contactee must always be the Spoke
-    # campaign contact, and the Contact.contactor must be the Spoke
-    # user given by message.user (if known), even for incoming
-    # messages. This sits a bit awkwardly, but if you think about
-    # contactor/contactee as being the people originating and
-    # receiving messages for the campaign as a whole (i.e. not from a
-    # per-message perspective) it makes a bit of sense.
-    #
-    # Note also that since conversations can be re-assigned, we can't
-    # just rely on "whoever sent the first message" to work out who
-    # will pick up and reply to any incoming messages, either. Best
-    # not make a guess that may well be in correct.
-
-    user = message.user
-    if user
-      contactor = UpsertMember.call(
-        {
-          phones: [{ phone: user.cell.sub(/^[+]*/, '') }],
-          firstname: user.first_name,
-          lastname: user.last_name
-        },
-        entry_point: "#{SYSTEM_NAME}",
-        ignore_name_change: false
-      )
-    end
+    # In particular, DON'T EVER USE message.user_number - for Twilio
+    # at least it will be a generated number, completely unrelated to
+    # the Spoke user's actual number.
+    contactor = message.user.present? ? message.user.upsert_member() : nil
 
     ## Find or create the contact campaign
     contact_campaign = handle_campaign(campaign_contact.campaign, false)
