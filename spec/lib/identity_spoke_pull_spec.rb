@@ -104,46 +104,98 @@ describe IdentitySpoke do
       expect(Member.count).to eq(4)
     end
 
-    it 'should create new members for campaign contacts' do
+    it 'should create new members for campaign contacts if no external id is set' do
+      expect(Member.count).to eq(0)
+      expect(IdentitySpoke::CampaignContact.first.external_id).to eq('')
+
       IdentitySpoke.fetch_new_messages(@sync_id) {
         # noop
       }
-      member = Member.find_by_phone('61427700401')
-      expect(member).to have_attributes(first_name: 'Bob1')
-      expect(member.contacts_received.count).to eq(2)
-      expect(member.contacts_made.count).to eq(0)
+      expect(Member.count).to eq(4)
+
+      members = Member.with_phone_numbers.where(phone_numbers: { phone: '61427700401' })
+      expect(members.count).to eq(1)
+      expect(members.first).to have_attributes(first_name: 'Bob1')
+      expect(members.first.contacts_received.count).to eq(2)
+      expect(members.first.contacts_made.count).to eq(0)
+
+      expect(IdentitySpoke::CampaignContact.first.external_id).to eq('1')
     end
 
-    it 'should create new members for user if none exist' do
+    it 'should use existing members for campaign contacts if external id set' do
+      member1 = FactoryBot.create(:member, name: 'Alice')
+      member1.update_phone_number('61427700401')
+
+      member2 = FactoryBot.create(:member, name: 'Bob')
+      member2.update_phone_number('61427700401')
+
+      IdentitySpoke::CampaignContact.first.update!(external_id: member2.id.to_s)
+
+      expect(Member.count).to eq(2)
       IdentitySpoke.fetch_new_messages(@sync_id) {
         # noop
       }
-      member = Member.find_by_phone('61411222333')
+      expect(Member.count).to eq(5)
+
+      members = Member.with_phone_numbers.where(phone_numbers: { phone: '61427700401' })
+      expect(members.count).to eq(2)
+
+      expect(members.first).to have_attributes(first_name: 'Alice')
+      expect(members.first.contacts_received.count).to eq(0)
+      expect(members.first.contacts_made.count).to eq(0)
+
+      expect(members.second).to have_attributes(first_name: 'Bob')
+      expect(members.second.contacts_received.count).to eq(2)
+      expect(members.second.contacts_made.count).to eq(0)
+    end
+
+    it 'should create new member for user if none exist' do
+      expect(Member.count).to eq(0)
+      IdentitySpoke.fetch_new_messages(@sync_id) {
+        # noop
+      }
+      expect(Member.count).to eq(4)
+
+      member = Member.find_sole_by(email: @spoke_user.email)
+      user = IdentitySpoke::User.find_sole_by(id: @spoke_user.id)
+
       expect(member).to have_attributes(first_name: 'Super', last_name: 'Vollie')
       expect(member.contacts_received.count).to eq(0)
       expect(member.contacts_made.count).to eq(6)
+      expect(member.get_external_ids(:spoke)).to eq([user.id.to_s])
+
+      expect(user.extra).to eq({ "identity" => { "member_id" => member.id } })
     end
 
     it 'should match existing members for campaign contacts and user' do
       IdentitySpoke::CampaignContact.find_each do |campaign_contact|
-        UpsertMember.call(
-          {
-            firstname: campaign_contact.first_name,
-            lastname: campaign_contact.last_name,
-            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }]
-          },
-          entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+        campaign_contact.update!(
+          external_id:
+            UpsertMember.call(
+              {
+                firstname: campaign_contact.first_name,
+                lastname: campaign_contact.last_name,
+                phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }]
+              },
+              entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+            ).id.to_s
         )
       end
       user = IdentitySpoke::User.last
-      UpsertMember.call(
-        {
-          firstname: user.first_name,
-          lastname: user.last_name,
-          phones: [{ phone: user.cell.sub(/^[+]*/, '') }]
-        },
-        entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
-      )
+      user.extra = {
+        identity: {
+          member_id: UpsertMember.call(
+            {
+              firstname: user.first_name,
+              lastname: user.last_name,
+              emails: [{ email: user.email }],
+              phones: [{ phone: user.cell.sub(/^[+]*/, '') }]
+            },
+            entry_point: "#{IdentitySpoke::SYSTEM_NAME}:test",
+          ).id
+        }
+      }
+      user.save!
 
       IdentitySpoke.fetch_new_messages(@sync_id) {
         # noop
@@ -294,6 +346,7 @@ describe IdentitySpoke do
     it 'should upsert messages' do
       member = FactoryBot.create(:member, first_name: 'Janis')
       member.update_phone_number('61427700401')
+      IdentitySpoke::CampaignContact.first!.update!(external_id: member.id.to_s)
       FactoryBot.create(:contact, contactee: member, external_id: '2')
       IdentitySpoke.fetch_new_messages(@sync_id) {
         # noop
@@ -360,7 +413,7 @@ describe IdentitySpoke do
       contact_campaign = FactoryBot.create(
         :contact_campaign,
         name: @spoke_campaign.title,
-        external_id: @spoke_campaign.id
+        external_id: @spoke_campaign.id.to_s
       )
       ## Create the contacts
       contact1 = FactoryBot.create(
@@ -486,11 +539,60 @@ describe IdentitySpoke do
       @spoke_user = FactoryBot.create(:spoke_user)
     end
 
-    it 'should opt out people that need it' do
-      member = FactoryBot.create(:member, title: 'BobNo')
-      member.update_phone_number('61427700409')
-      member.subscribe_to(@subscription)
-      expect(member.is_subscribed_to?(@subscription)).to eq(true)
+    it 'should unsubscribe a specific member when external_id is set' do
+      # First member should not get unsubscribed
+      member1 = FactoryBot.create(:member, first_name: 'BobNo')
+      member1.update_phone_number('61427700409')
+      member1.subscribe_to(@subscription)
+      expect(member1.is_subscribed_to?(@subscription)).to eq(true)
+
+      # Second member with the same phone number should get unsubscribed
+      member2 = FactoryBot.create(:member, first_name: 'Alice')
+      member2.update_phone_number('61427700409')
+      member2.subscribe_to(@subscription)
+      expect(member2.is_subscribed_to?(@subscription)).to eq(true)
+
+      spoke_assignment = FactoryBot.create(
+        :spoke_assignment,
+        user: @spoke_user,
+        campaign: @spoke_campaign
+      )
+      campaign_contact = FactoryBot.create(
+        :spoke_campaign_contact,
+        first_name: 'Alice',
+        cell: '+61427700409',
+        campaign: @spoke_campaign,
+        assignment: spoke_assignment,
+        external_id: member2.id.to_s
+      )
+      FactoryBot.create(
+        :spoke_opt_out,
+        cell: campaign_contact.cell,
+        organization: @spoke_organization,
+        assignment: spoke_assignment
+      )
+      FactoryBot.create(
+        :spoke_message_delivered,
+        id: IdentitySpoke::Message.maximum(:id).to_i + 1,
+        created_at: @time,
+        assignment: spoke_assignment,
+        send_status: 'DELIVERED',
+        contact_number: campaign_contact.cell,
+        campaign_contact: campaign_contact,
+        user: @spoke_user,
+        user_number: @spoke_user.cell
+      )
+
+      expect(Member.count).to eq(2)
+      IdentitySpoke.fetch_new_opt_outs(@sync_id) {
+        # noop
+      }
+      expect(Member.count).to eq(2)
+      expect(Member.first.is_subscribed_to?(@subscription)).to eq(true)
+      expect(Member.second.is_subscribed_to?(@subscription)).to eq(false)
+    end
+
+    it 'should create a new, unsubscribed member if none with matching phone exists' do
       spoke_assignment = FactoryBot.create(
         :spoke_assignment,
         user: @spoke_user,
@@ -520,11 +622,62 @@ describe IdentitySpoke do
         user: @spoke_user,
         user_number: @spoke_user.cell
       )
+      expect(Member.count).to eq(0)
       IdentitySpoke.fetch_new_opt_outs(@sync_id) {
         # noop
       }
-      member.reload
-      expect(member.is_subscribed_to?(@subscription)).to eq(false)
+      expect(Member.count).to eq(1)
+      expect(Member.first.is_subscribed_to?(@subscription)).to eq(false)
+    end
+
+    it 'should find and unsubscribe all members with matching phones' do
+      member1 = FactoryBot.create(:member, first_name: 'Alice')
+      member1.update_phone_number('61427700409')
+      member1.subscribe_to(@subscription)
+      expect(member1.is_subscribed_to?(@subscription)).to eq(true)
+
+      member2 = FactoryBot.create(:member, first_name: 'Bob')
+      member2.update_phone_number('61427700409')
+      member2.subscribe_to(@subscription)
+      expect(member2.is_subscribed_to?(@subscription)).to eq(true)
+
+      spoke_assignment = FactoryBot.create(
+        :spoke_assignment,
+        user: @spoke_user,
+        campaign: @spoke_campaign
+      )
+      campaign_contact = FactoryBot.create(
+        :spoke_campaign_contact,
+        first_name: 'BobNo',
+        cell: '+61427700409',
+        campaign: @spoke_campaign,
+        assignment: spoke_assignment,
+      )
+      FactoryBot.create(
+        :spoke_opt_out,
+        cell: campaign_contact.cell,
+        organization: @spoke_organization,
+        assignment: spoke_assignment
+      )
+      FactoryBot.create(
+        :spoke_message_delivered,
+        id: IdentitySpoke::Message.maximum(:id).to_i + 1,
+        created_at: @time,
+        assignment: spoke_assignment,
+        send_status: 'DELIVERED',
+        contact_number: campaign_contact.cell,
+        campaign_contact: campaign_contact,
+        user: @spoke_user,
+        user_number: @spoke_user.cell
+      )
+
+      expect(Member.count).to eq(2)
+      IdentitySpoke.fetch_new_opt_outs(@sync_id) {
+        # noop
+      }
+      expect(Member.count).to eq(2)
+      expect(Member.first.is_subscribed_to?(@subscription)).to eq(false)
+      expect(Member.second.is_subscribed_to?(@subscription)).to eq(false)
     end
   end
 
