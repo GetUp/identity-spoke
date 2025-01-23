@@ -137,24 +137,43 @@ module IdentitySpoke
 
     iteration_method = force ? :find_each : :each
 
+    subscription = Subscription.find_sole_by(
+      id: Settings.spoke.subscription_id
+    )
+
     updated_opt_outs.send(iteration_method) do |opt_out|
       Rails.logger.info "#{SYSTEM_NAME.titleize} #{sync_id}: Handling opt-out: #{opt_out.id}/#{opt_out.created_at.utc.to_fs(:inspect)}"
 
-      campaign_contact = IdentitySpoke::CampaignContact.where(cell: opt_out.cell).last
-      if campaign_contact
-        contactee = UpsertMember.call(
-          {
-            phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
-            firstname: campaign_contact.first_name,
-            lastname: campaign_contact.last_name,
-            member_id: campaign_contact.external_id
-          },
-          entry_point: "#{SYSTEM_NAME}",
-          ignore_name_change: false
+      # Spoke only updates CampaignContact.is_opted_out in a batch,
+      # and doesn't update the updated_at column when it does. So just
+      # look for the most recent campaign contact with matching phone
+      # number instead.
+      #
+      # If that contact has an external_id use that to look up the
+      # specific member, otherwise we need to opt out everyone with
+      # that phone number - even though our data is low quality such
+      # that that we may have multiple members with the opted out
+      # number, the actual person with that number doesn't want to
+      # hear from us so we can't leave any subscribed.
+
+      cell = opt_out.cell
+      campaign_contact = IdentitySpoke::CampaignContact.where(cell: cell).last!
+      if campaign_contact.external_id.present?
+        members = [Member.find_sole_by(id: campaign_contact.external_id.to_i)]
+      else
+        members = Member.select(:id).distinct.joins(:phone_numbers).where(
+          phone_numbers: {
+            phone: PhoneNumber.standardise_phone_number(cell)
+          }
         )
-        subscription = Subscription.find(Settings.spoke.subscription_id)
-        contactee.unsubscribe_from(subscription, reason: 'spoke:opt_out', event_time: DateTime.now) if contactee
+        if members.size == 0
+          members = [campaign_contact.upsert_member()]
+        end
       end
+
+      members.each { |member|
+        member.unsubscribe_from(subscription, reason: 'spoke:opt_out')
+      }
     end
 
     unless updated_opt_outs.empty?
@@ -256,42 +275,22 @@ module IdentitySpoke
       return
     end
 
-    ## Create Member for campaign contact
-    campaign_contact_member = UpsertMember.call(
-      {
-        phones: [{ phone: campaign_contact.cell.sub(/^[+]*/, '') }],
-        firstname: campaign_contact.first_name,
-        lastname: campaign_contact.last_name,
-        member_id: campaign_contact.external_id
-      },
-      entry_point: "#{SYSTEM_NAME}",
-      ignore_name_change: false
-    )
+    # Upsert contacted member
+    contactee = campaign_contact.upsert_member
 
-    user = message.user
-    if user
-      user_member = UpsertMember.call(
-        {
-          phones: [{ phone: user.cell.sub(/^[+]*/, '') }],
-          firstname: user.first_name,
-          lastname: user.last_name
-        },
-        entry_point: "#{SYSTEM_NAME}",
-        ignore_name_change: false
-      )
-    else
-      user_member = UpsertMember.call(
-        {
-          phones: [{ phone: message.user_number.sub(/^[+]*/, '') }],
-        },
-        entry_point: "#{SYSTEM_NAME}",
-        ignore_name_change: false
-      )
-    end
-
-    ## Assign the contactor and contactee according to if the message was from the campaign contact
-    contactor = message.is_from_contact ? campaign_contact_member : user_member
-    contactee = message.is_from_contact ? user_member : campaign_contact_member
+    # Upsert contacting member. If a message is outgoing,
+    # 'message.user' will be set, otherwise it will be null since
+    # anyone could reply to the message.
+    #
+    # However for incoming messages, since we don't know in advance
+    # who will rely to it, and since we only have a phone number for
+    # them (and hence can't reliably upsert them), don't try to
+    # upsert.
+    #
+    # In particular, DON'T EVER USE message.user_number - for Twilio
+    # at least it will be a generated number, completely unrelated to
+    # the Spoke user's actual number.
+    contactor = message.user.present? ? message.user.upsert_member() : nil
 
     ## Find or create the contact campaign
     contact_campaign = handle_campaign(campaign_contact.campaign, false)

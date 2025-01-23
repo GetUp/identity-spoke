@@ -1,4 +1,6 @@
 class MemberExternalId < ApplicationRecord
+  include AuditPlease
+
   belongs_to :member
 
   validates_presence_of :member

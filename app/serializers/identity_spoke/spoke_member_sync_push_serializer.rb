@@ -3,7 +3,7 @@ module IdentitySpoke
     attributes :external_id, :first_name, :last_name, :cell, :campaign_id, :custom_fields
 
     def external_id
-      @object.id
+      @object.id.to_s
     end
 
     def first_name

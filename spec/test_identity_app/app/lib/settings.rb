@@ -66,6 +66,12 @@ class Settings
     }
   end
 
+  def self.email
+    return {
+      "unsubscribe_url" => "http://localhost/unsubscribe",
+    }
+  end
+
   def self.options
     return {
       "default_member_opt_in_subscriptions" => false,
@@ -73,6 +79,12 @@ class Settings
       "default_phone_country_code" => '61',
       "default_mobile_phone_national_destination_code" => '4',
       "ignore_name_change_for_donation" => true
+    }
+  end
+
+  def self.rollbar
+    return {
+      "api_key" => nil
     }
   end
 end

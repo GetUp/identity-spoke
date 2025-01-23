@@ -35,6 +35,8 @@ class Search < ApplicationRecord
     where(pinned: true)
   }
 
+  before_save :ensure_permanent_if_template
+
   # This little oddity is so that the SQL is available to other apps without them having to have the full Search class
   after_save :save_sql
 
@@ -402,23 +404,25 @@ class Search < ApplicationRecord
   def self.initialize_filters
     @@filters = []
 
-    add_filter_group SearchFilters::Basic
-    add_filter_group SearchFilters::Actions
-    add_filter_group SearchFilters::CirclesOfEngagement
-    add_filter_group SearchFilters::Donations
-    add_filter_group SearchFilters::Demographics
-    add_filter_group SearchFilters::DropOffs
-    add_filter_group SearchFilters::Geography
-    add_filter_group SearchFilters::People
-    add_filter_group SearchFilters::IRL
-    add_filter_group SearchFilters::Notes
-    add_filter_group SearchFilters::Mailings
-    add_filter_group SearchFilters::Contacts
-    add_filter_group SearchFilters::Advanced
-    add_filter_group SearchFilters::ExternalSystem
-    add_filter_group SearchFilters::Events
-    add_filter_group SearchFilters::Searches
-    add_filter_group SearchFilters::Subscriptions
+    unless Settings.searches.use_org_filters_only
+      add_filter_group SearchFilters::Basic
+      add_filter_group SearchFilters::Actions
+      add_filter_group SearchFilters::CirclesOfEngagement
+      add_filter_group SearchFilters::Donations
+      add_filter_group SearchFilters::Demographics
+      add_filter_group SearchFilters::DropOffs
+      add_filter_group SearchFilters::Geography
+      add_filter_group SearchFilters::People
+      add_filter_group SearchFilters::IRL
+      add_filter_group SearchFilters::Notes
+      add_filter_group SearchFilters::Mailings
+      add_filter_group SearchFilters::Contacts
+      add_filter_group SearchFilters::Advanced
+      add_filter_group SearchFilters::ExternalSystem
+      add_filter_group SearchFilters::Events
+      add_filter_group SearchFilters::Searches
+      add_filter_group SearchFilters::Subscriptions
+    end
   end
 
   initialize_filters
@@ -486,13 +490,18 @@ class Search < ApplicationRecord
       end
     end
 
-    filters.reject! { |filter|
-      optgroup = filter[:optgroup]
-      (optgroup == 'Actions' && !Settings.features.actions) ||
-        (optgroup == 'Donations' && !Settings.features.donations) ||
-        (optgroup == 'IRL' && !Settings.features.irl) ||
-        (optgroup == 'Mailings' && !Settings.features.mailings) || (['Circles of Engagement', 'Drop Offs'].include?(optgroup) && !Settings.features.circles_of_engagement)
-    }
+    unless Settings.searches.use_org_filters_only
+      filters.reject! { |filter|
+        optgroup = filter[:optgroup]
+        (optgroup == 'Actions' && !Settings.features.actions) ||
+          (optgroup == 'Donations' && !Settings.features.donations) ||
+          (optgroup == 'Events' && !Settings.features.events) ||
+          (optgroup == 'IRL' && !Settings.features.irl) ||
+          (optgroup == 'Mailings' && !Settings.features.mailings) ||
+          (optgroup == 'Demographics' && !Settings.features.demographics.enabled) ||
+          (['Circles of Engagement', 'Drop Offs'].include?(optgroup) && !Settings.features.circles_of_engagement)
+      }
+    end
 
     if Settings.searches.filters.present?
       filters.select { |filter| Settings.searches.filters.include? filter[:id] }
@@ -502,11 +511,11 @@ class Search < ApplicationRecord
   end
 
   def to_hash_for_api
-    as_json.slice("id", "name", "rules", "total_members", "complete", "permanent", "sql", "updated_at")
+    as_json.slice("id", "name", "rules", "total_members", "complete", "permanent", "template", "sql", "updated_at")
   end
 
   def self.parse(payload)
-    search_params = payload.slice("name", "pinned", "permanent", "description")
+    search_params = payload.slice("name", "pinned", "permanent", "template", "description")
     search_params['rules'] = clean_search_values(payload['search']) if payload['search'].present?
     search_params
   end
@@ -530,5 +539,14 @@ class Search < ApplicationRecord
       end
     end
     payload
+  end
+
+  private
+
+  def ensure_permanent_if_template
+    # If template is true, force permanent to also be true
+    if self.template
+      self.permanent = true
+    end
   end
 end

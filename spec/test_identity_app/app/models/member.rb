@@ -80,6 +80,7 @@ class Member < ApplicationRecord
 
   has_many :donations, class_name: 'Donations::Donation'
   has_many :regular_donations, class_name: 'Donations::RegularDonation'
+  has_many :failed_donations, class_name: 'Donations::FailedDonation'
   has_many :member_journeys
   has_many :journeys, through: :member_journeys
   has_many :notes, -> { order 'notes.created_at DESC' }
@@ -300,7 +301,8 @@ class Member < ApplicationRecord
     }
 
     if (new_address = addresses.find_by(address_attributes))
-      new_address.touch!
+      # Touch it only if it is not a current address
+      new_address.touch! unless new_address.id == old_address_id
     else
       new_address = addresses.create!(address_attributes)
     end
@@ -324,7 +326,8 @@ class Member < ApplicationRecord
     # If it is a new phone number, create a new phone number and it will be the primary one
 
     new_phone_number = PhoneNumber.standardise_phone_number(new_phone_number.to_s)
-    return false if phone_numbers.first.try(:phone) == new_phone_number
+    return false if new_phone_number.nil?
+    return true if phone_numbers.first.try(:phone) == new_phone_number
 
     if (phone_record = phone_numbers.find_by(phone: new_phone_number))
       # Make it most recently updated it so it becomes the primary phone number
@@ -793,7 +796,7 @@ class Member < ApplicationRecord
       %w(skill resource organisation).each do |w|
         named_attribute_data = select_data(row, w)
         unless named_attribute_data.empty?
-          hash_key = "#{w}s".to_sym
+          hash_key = :"#{w}s"
           member_hash[hash_key] = []
           named_attribute_data.each do |_key, value|
             member_hash[hash_key] << { name: value }
@@ -825,14 +828,31 @@ class Member < ApplicationRecord
     # load_from_csv is for loading members from external services such as ControlShift
     # ControlShift has a nightly full data load, including old data, so can't just upsert everything
     def load_from_csv(row)
+      cs_id = row['id']
+      if cs_id.blank?
+        raise 'ControlShift id missing'
+      end
+
       payload = {
         emails: [{ email: row['email'] }],
         firstname: row['first_name'],
         lastname: row['last_name'],
-        external_ids: { controlshift: row['id'] },
+        external_ids: { controlshift: cs_id },
         updated_at: row['updated_at']
       }
-      UpsertMember.call(payload)
+
+      retries = 0
+      begin
+        UpsertMember.call(payload)
+      rescue StandardError => e
+        # Possibility of race conditions in the transaction.
+        # Most likely from different CSL imports trying to upsert the same member.
+        # Transaction will clean up after itself, and then retry again.
+        # Have a limit of 3 retries so that we don't retry forever.
+        retries += 1
+        retry if retries < 3
+        Rails.logger.error("Failed to upsert member from ControlShift: #{e}")
+      end
     end
 
     def select_data(rows, key_name)
@@ -865,152 +885,179 @@ class Member < ApplicationRecord
       # payload includes the relevant consent. If no consent is present, we COULD still
       # store this action, but without any personal data (eg. empty name, email, etc...)
 
+      # find/create the member
+      cons_hash = payload[:cons_hash].merge(updated_at: payload[:create_dt])
+      ignore_names = Settings.options.ignore_name_change_for_donation && ['donate', 'regular_donate'].include?(payload[:action_type])
       begin
-        # find/create the member
-        cons_hash = payload[:cons_hash].merge(updated_at: payload[:create_dt])
-        ignore_names = Settings.options.ignore_name_change_for_donation && ['donate', 'regular_donate'].include?(payload[:action_type])
         member = UpsertMember.call(
           cons_hash,
           entry_point: "action:#{payload[:action_name]}",
           ignore_name_change: ignore_names
         )
-        if member.present?
-          # find/create the action
-          begin
-            query = { technical_type: payload[:action_technical_type],
-                      external_id: payload[:external_id] }
-            action = nil
+      rescue StandardError
+        member = nil
+      end
+      if member.present?
+        # find/create the action
+        begin
+          query = { technical_type: payload[:action_technical_type],
+                    external_id: payload[:external_id] }
+          action = nil
 
-            ### If no language specified in payload, find actions matching technical_type & external_id
-            if payload[:language].nil?
-              actions = Action.where(query)
-              if actions.length == 1
-                action = actions.first # if action only exists in a single language (or no language: legacy data)
-              elsif actions.length > 1
-                Rails.logger.error "The member action [member_id: #{member.id}, external_id: #{payload[:external_id]}, "\
-                                   "technical_type: #{payload[:action_technical_type]}] contains no language code but"\
-                                   "the action already exists in more than one language"
+          ### If no language specified in payload, find actions matching technical_type & external_id
+          if payload[:language].nil?
+            actions = Action.where(query)
+            if actions.length == 1
+              action = actions.first # if action only exists in a single language (or no language: legacy data)
+            elsif actions.length > 1
+              Rails.logger.error "The member action [member_id: #{member.id}, external_id: #{payload[:external_id]}, " \
+                                 "technical_type: #{payload[:action_technical_type]}] contains no language code but" \
+                                 "the action already exists in more than one language"
 
-                # Still want to record an action, so first try to find a matching action with the default language
-                action = actions.select { |a| a.language == AppSetting.actions.default_language }[0]
-                # If 'action' is still nil here, then a new action with the default language will be created below
-              end
-            else
-              # prefer searching for an (old) action with (explicitly) no language over creating a new (duplicate) one with a language
-              action = Action.find_by(query.merge(language: payload[:language])) || Action.find_by(query.merge(language: nil))
+              # Still want to record an action, so first try to find a matching action with the default language
+              action = actions.select { |a| a.language == AppSetting.actions.default_language }[0]
+              # If 'action' is still nil here, then a new action with the default language will be created below
             end
-
-            # Create a new action if none found
-            action = Action.create!(
-              name: payload[:action_name],
-              public_name: payload[:action_public_name],
-              action_type: payload[:action_type],
-              technical_type: payload[:action_technical_type],
-              description: payload[:action_description] || '',
-              external_id: payload[:external_id],
-              language: payload[:language].presence || AppSetting.actions.default_language
-            ) unless action
-          rescue ActiveRecord::RecordNotUnique
-            retry
-          end
-
-          # If the action's name has changed
-          if payload[:action_name].present? && payload[:action_name] != action.name
-            action.update!(name: payload[:action_name])
-          end
-
-          # If the action's public name has changed
-          if payload[:action_public_name].present? && payload[:action_public_name] != action.public_name
-            action.update!(public_name: payload[:action_public_name])
-          end
-
-          # Assign the controlshift campaign if one isn't set
-          if !action.campaign && action.technical_type == 'cby_petition'
-            campaign = Campaign.find_by(controlshift_campaign_id: action.external_id, campaign_type: 'controlshift')
-            campaign.store_action_language(action.language) if campaign
-            action.update!(campaign_id: campaign.id) if campaign
-          end
-
-          if payload[:campaign_id].present? && !action.campaign
-            # Allow external actions to pass a known identity campaign id and link the action
-            # to that campaign
-            campaign = Campaign.find_by(id: payload[:campaign_id])
-            campaign.store_action_language(action.language) if campaign
-            action.update!(campaign_id: campaign.id) if campaign
-          end
-
-          # create member action
-          if payload[:create_dt].presence.is_a? String
-            created_at = ActiveSupport::TimeZone.new('UTC').parse(payload[:create_dt])
           else
-            created_at = payload[:create_dt]
+            # prefer searching for an (old) action with (explicitly) no language over creating a new (duplicate) one with a language
+            action = Action.find_by(query.merge(language: payload[:language])) || Action.find_by(query.merge(language: nil))
           end
 
-          member_action = MemberAction.find_or_initialize_by(
-            action_id: action.id,
-            member_id: member.id,
-            created_at: created_at
-          )
-          new_record = member_action.new_record?
+          # Create a new action if none found
+          action = Action.create!(
+            name: payload[:action_name],
+            public_name: payload[:action_public_name],
+            action_type: payload[:action_type],
+            technical_type: payload[:action_technical_type],
+            description: payload[:action_description] || '',
+            external_id: payload[:external_id],
+            language: payload[:language].presence || AppSetting.actions.default_language
+          ) unless action
+        rescue ActiveRecord::RecordNotUnique
+          retry
+        end
 
-          # subscribe the member to mailings
-          # don't subscribe if disable_auto_subscribe is enabled (subscriptions must be handled through consents and post_consent_methods)
-          # only if action is newer than his unsubscribe;
-          # if opt_in is present, it must be set to true
-          if !Settings.gdpr.disable_auto_subscribe && (payload[:opt_in].nil? || payload[:opt_in]) && !member.subscribed?
-            email_subscription = member.member_subscriptions.find_by(subscription: Subscription::EMAIL_SUBSCRIPTION)
-            if email_subscription.nil?
-              member.subscribe
-            elsif member_action.created_at > email_subscription.unsubscribed_at
-              member.subscribe
+        # If the action's name has changed
+        if payload[:action_name].present? && payload[:action_name] != action.name
+          action.update!(name: payload[:action_name])
+        end
+
+        # If the action's public name has changed
+        if payload[:action_public_name].present? && payload[:action_public_name] != action.public_name
+          action.update!(public_name: payload[:action_public_name])
+        end
+
+        # Assign the controlshift campaign if one isn't set
+        if !action.campaign && action.technical_type == 'cby_petition'
+          campaign = Campaign.find_by(controlshift_campaign_id: action.external_id, campaign_type: 'controlshift')
+          campaign.store_action_language(action.language) if campaign
+          action.update!(campaign_id: campaign.id) if campaign
+        end
+
+        if payload[:campaign_id].present? && !action.campaign
+          # Allow external actions to pass a known identity campaign id and link the action
+          # to that campaign
+          campaign = Campaign.find_by(id: payload[:campaign_id])
+          campaign.store_action_language(action.language) if campaign
+          action.update!(campaign_id: campaign.id) if campaign
+        end
+
+        # create member action
+        if payload[:create_dt].presence.is_a? String
+          created_at = ActiveSupport::TimeZone.new('UTC').parse(payload[:create_dt])
+        else
+          created_at = payload[:create_dt]
+        end
+
+        member_action = MemberAction.find_or_initialize_by(
+          action_id: action.id,
+          member_id: member.id,
+          created_at: created_at
+        )
+        new_record = member_action.new_record?
+
+        # subscribe the member to mailings
+        # don't subscribe if disable_auto_subscribe is enabled (subscriptions must be handled through consents and post_consent_methods)
+        # only if action is newer than his unsubscribe;
+        # if opt_in is present, it must be set to true
+        if !Settings.gdpr.disable_auto_subscribe && (payload[:opt_in].nil? || payload[:opt_in]) && !member.subscribed?
+          email_subscription = member.member_subscriptions.find_by(subscription: Subscription::EMAIL_SUBSCRIPTION)
+          if email_subscription.nil?
+            member.subscribe
+          elsif member_action.created_at > email_subscription.unsubscribed_at
+            member.subscribe
+          end
+        end
+
+        if member_action.valid? && payload[:source].present?
+          # store utm codes against the action
+          source_hash = payload[:source].slice(:source, :medium, :campaign).select { |_k, v| v.present? }
+
+          if source_hash.present?
+            source = Source.find_or_create_with_defaults(source_hash)
+
+            # This *must* be an update in order to allow requests which update an old member action's source
+            member_action.update!(source_id: source.id)
+          end
+        end
+
+        if new_record && member_action.valid?
+          # add consents to the member action
+          if payload[:consents].present?
+            payload[:consents].each do |consent_hash|
+              next if consent_hash[:consent_level] == 'no_change' && !Settings.consent.record_no_change_consents
+
+              consent_text = ConsentText.find_by!(public_id: consent_hash[:public_id])
+
+              member_action.member_action_consents.build(
+                member_action: member_action,
+                consent_text: consent_text,
+                consent_level: consent_hash[:consent_level],
+                consent_method: consent_hash[:consent_method],
+                consent_method_option: consent_hash[:consent_method_option],
+                parent_member_action_consent: nil, # TODO: Something like `member.current_consents.find_by(consent_public_id: consent_text.public_id).member_action_consent` but only if it's a 'no_change'...
+                created_at: payload[:create_dt],
+                updated_at: payload[:create_dt]
+              )
             end
           end
 
-          if member_action.valid? && payload[:source].present?
-            # store utm codes against the action
-            source_hash = payload[:source].slice(:source, :medium, :campaign).select { |_k, v| v.present? }
+          ApplicationRecord.transaction do
+            member_action.save!
 
-            if source_hash.present?
-              source = Source.find_or_create_with_defaults(source_hash)
-
-              # This *must* be an update in order to allow requests which update an old member action's source
-              member_action.update!(source_id: source.id)
-            end
-          end
-
-          if new_record && member_action.valid?
-            # add consents to the member action
-            if payload[:consents].present?
-              payload[:consents].each do |consent_hash|
-                next if consent_hash[:consent_level] == 'no_change' && !Settings.consent.record_no_change_consents
-
-                consent_text = ConsentText.find_by!(public_id: consent_hash[:public_id])
-
-                member_action.member_action_consents.build(
-                  member_action: member_action,
-                  consent_text: consent_text,
-                  consent_level: consent_hash[:consent_level],
-                  consent_method: consent_hash[:consent_method],
-                  consent_method_option: consent_hash[:consent_method_option],
-                  parent_member_action_consent: nil, # TODO: Something like `member.current_consents.find_by(consent_public_id: consent_text.public_id).member_action_consent` but only if it's a 'no_change'...
-                  created_at: payload[:create_dt],
-                  updated_at: payload[:create_dt]
+            # split meta data into keys
+            if payload[:metadata]
+              payload[:metadata].each do |key, value|
+                # Get the key
+                action_key = ActionKey.find_or_create_by!(action: action, key: key.to_s)
+                # Allow nested data as metadata
+                if value.is_a?(Hash) || value.is_a?(Array)
+                  value = value.to_json
+                end
+                MemberActionData.create!(
+                  member_action_id: member_action.id,
+                  action_key: action_key,
+                  value: value
                 )
               end
             end
 
-            ApplicationRecord.transaction do
-              member_action.save!
+            # parse survey responses
+            if payload[:survey_responses]
+              payload[:survey_responses].each do |sr|
+                action_key = ActionKey.find_or_create_by!(action: action, key: sr[:question][:text])
 
-              # split meta data into keys
-              if payload[:metadata]
-                payload[:metadata].each do |key, value|
-                  # Get the key
-                  action_key = ActionKey.find_or_create_by!(action: action, key: key.to_s)
-                  # Allow nested data as metadata
-                  if value.is_a?(Hash) || value.is_a?(Array)
-                    value = value.to_json
-                  end
+                Question.find_or_create_by! action_key: action_key do |q|
+                  q.question_type = sr[:question][:qtype]
+                end
+
+                values = if sr[:answer].is_a? Array
+                           sr[:answer]
+                         else
+                           [sr[:answer]]
+                         end
+
+                values.each do |value|
                   MemberActionData.create!(
                     member_action_id: member_action.id,
                     action_key: action_key,
@@ -1018,50 +1065,23 @@ class Member < ApplicationRecord
                   )
                 end
               end
-
-              # parse survey responses
-              if payload[:survey_responses]
-                payload[:survey_responses].each do |sr|
-                  action_key = ActionKey.find_or_create_by!(action: action, key: sr[:question][:text])
-
-                  Question.find_or_create_by! action_key: action_key do |q|
-                    q.question_type = sr[:question][:qtype]
-                  end
-
-                  values = if sr[:answer].is_a? Array
-                             sr[:answer]
-                           else
-                             [sr[:answer]]
-                           end
-
-                  values.each do |value|
-                    MemberActionData.create!(
-                      member_action_id: member_action.id,
-                      action_key: action_key,
-                      value: value
-                    )
-                  end
-                end
-              end
-
-              # XXX old 38 data has nil created_at. Can't compare nil and date like this.
-              if member.created_at.present? && member.created_at > member_action.created_at
-                member.created_at = member_action.created_at
-                member.save!
-              end
             end
-          else
-            Rails.logger.info "Duplicate member action: action #{member_action.action_id} for member #{member_action.member_id}"
-            return member_action
+
+            # XXX old 38 data has nil created_at. Can't compare nil and date like this.
+            if member.created_at.present? && member.created_at > member_action.created_at
+              member.created_at = member_action.created_at
+              member.save!
+            end
           end
         else
-          Rails.logger.info "Failed to upsert member. Hash: #{payload.inspect}"
-          return nil
+          Rails.logger.info "Duplicate member action: action #{member_action.action_id} for member #{member_action.member_id}"
+          return member_action
         end
-        return member_action
-      rescue => e
-        raise e
+      else
+        Rails.logger.info "Failed to upsert member. Hash: #{payload.inspect}"
+        return nil
       end
+      return member_action
     end
 
     # Takes a phone number and returns member or nil
